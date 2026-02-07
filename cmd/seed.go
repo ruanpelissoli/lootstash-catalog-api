@@ -25,6 +25,7 @@ var (
 	seedS3AccessKey        string
 	seedS3SecretKey        string
 	seedS3Region           string
+	seedSupabaseURL        string
 	seedCatalogPath        string
 )
 
@@ -86,10 +87,11 @@ func init() {
 	seedCmd.Flags().BoolVar(&seedSkipVerify, "skip-verify", false, "Skip verification step")
 
 	seedCmd.Flags().StringVar(&seedCatalogPath, "catalog", "catalogs/d2", "Path to catalog folder")
-	seedCmd.Flags().StringVar(&seedS3Endpoint, "s3-endpoint", "http://127.0.0.1:54321/storage/v1/s3", "S3 endpoint URL")
-	seedCmd.Flags().StringVar(&seedS3AccessKey, "s3-access-key", "625729a08b95bf1b7ff351a663f3a23c", "S3 access key")
-	seedCmd.Flags().StringVar(&seedS3SecretKey, "s3-secret-key", "850181e4652dd023b7a98c58ae0d2d34bd487ee0cc3254aed6eda37307425907", "S3 secret key")
-	seedCmd.Flags().StringVar(&seedS3Region, "s3-region", "local", "S3 region")
+	seedCmd.Flags().StringVar(&seedS3Endpoint, "s3-endpoint", getEnvOrDefault("SUPABASE_S3_ENDPOINT", "http://127.0.0.1:54321/storage/v1/s3"), "S3 endpoint URL (env: SUPABASE_S3_ENDPOINT)")
+	seedCmd.Flags().StringVar(&seedS3AccessKey, "s3-access-key", getEnvOrDefault("SUPABASE_S3_ACCESS_KEY", "625729a08b95bf1b7ff351a663f3a23c"), "S3 access key (env: SUPABASE_S3_ACCESS_KEY)")
+	seedCmd.Flags().StringVar(&seedS3SecretKey, "s3-secret-key", getEnvOrDefault("SUPABASE_S3_SECRET_KEY", "850181e4652dd023b7a98c58ae0d2d34bd487ee0cc3254aed6eda37307425907"), "S3 secret key (env: SUPABASE_S3_SECRET_KEY)")
+	seedCmd.Flags().StringVar(&seedS3Region, "s3-region", getEnvOrDefault("SUPABASE_S3_REGION", "local"), "S3 region (env: SUPABASE_S3_REGION)")
+	seedCmd.Flags().StringVar(&seedSupabaseURL, "supabase-url", getEnvOrDefault("SUPABASE_URL", "http://127.0.0.1:54321"), "Supabase URL for public storage URLs (env: SUPABASE_URL)")
 }
 
 func runSeed(cmd *cobra.Command, args []string) error {
@@ -435,7 +437,7 @@ func seedStepUploadIcons(ctx context.Context, db *database.DB) error {
 		seedS3SecretKey,
 		seedS3Region,
 		"d2-items",
-		"http://127.0.0.1:54321",
+		seedSupabaseURL,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create S3 storage: %w", err)
@@ -476,7 +478,7 @@ func seedStepGenerateRunewordIcons(ctx context.Context, db *database.DB) error {
 		seedS3SecretKey,
 		seedS3Region,
 		"d2-items",
-		"http://127.0.0.1:54321",
+		seedSupabaseURL,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create S3 storage: %w", err)

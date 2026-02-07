@@ -4,8 +4,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 )
+
+func init() {
+	// Load .env file before cobra flags are parsed
+	_ = godotenv.Load()
+}
 
 var (
 	databaseURL string
