@@ -8,9 +8,6 @@ primary_region = 'iad'
 
 [build]
 
-[deploy]
-  release_command = "/server seed d2 --catalog /catalogs/d2"
-
 [http_service]
   internal_port = 8080
   force_https = true
