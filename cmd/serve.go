@@ -47,7 +47,7 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 
 	serveCmd.Flags().IntVar(&port, "port", 8080, "Port to listen on")
-	serveCmd.Flags().StringVar(&allowedOrigins, "allowed-origins", "*", "Comma-separated list of allowed CORS origins (use * for all)")
+	serveCmd.Flags().StringVar(&allowedOrigins, "allowed-origins", getEnvOrDefault("ALLOWED_ORIGIN", "*"), "Comma-separated list of allowed CORS origins (use * for all)")
 }
 
 func runServe(cmd *cobra.Command, args []string) error {

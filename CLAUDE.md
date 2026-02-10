@@ -91,6 +91,7 @@ Items have a `Properties` array with `Code`, `Min`, `Max`, `Param` fields. The t
 | `REDIS_URL` | Redis connection string |
 | `SUPABASE_URL` | Supabase project URL (for storage) |
 | `SUPABASE_SERVICE_KEY` | Supabase service role key |
+| `ALLOWED_ORIGIN` | CORS allowed origins (default: `*`) |
 
 ## Docker
 
