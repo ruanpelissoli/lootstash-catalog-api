@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/api"
+	"github.com/ruanpelissoli/lootstash-catalog-api/internal/cache"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/database"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/games/d2"
 	"github.com/spf13/cobra"
@@ -62,6 +63,24 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	defer db.Close()
 	PrintSuccess("Connected to database")
+
+	// Run catalog import on startup
+	PrintInfo("Running catalog import...")
+	var redisCache *cache.RedisCache
+	redisCache, cacheErr := cache.NewRedisCache(ctx, GetRedisURL())
+	if cacheErr != nil {
+		PrintInfo(fmt.Sprintf("Redis not available: %v (continuing without cache)", cacheErr))
+		redisCache = nil
+	} else {
+		defer redisCache.Close()
+	}
+
+	importer := d2.NewImporter(db, redisCache)
+	if _, importErr := importer.Import(ctx, "catalogs/d2"); importErr != nil {
+		PrintError(fmt.Sprintf("Catalog import failed: %v (server will start with existing data)", importErr))
+	} else {
+		PrintSuccess("Catalog import completed")
+	}
 
 	// Create repository
 	repo := d2.NewRepository(db.Pool())
