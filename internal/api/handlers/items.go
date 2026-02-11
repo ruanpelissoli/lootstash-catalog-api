@@ -655,14 +655,17 @@ func (h *ItemHandler) convertUniqueToDTO(item *d2.UniqueItem, base *d2.ItemBase)
 			ItemType: h.resolveItemTypeName(base.ItemType),
 		}
 		if base.MaxAC > 0 {
-			defense := base.MaxAC
-			detail.Base.Defense = &defense
+			detail.Base.Defense = &dto.DefenseRange{
+				Min: base.MinAC,
+				Max: base.MaxAC,
+			}
 		}
 		if base.MaxDam > 0 {
 			detail.Base.MinDamage = &base.MinDam
 			detail.Base.MaxDamage = &base.MaxDam
 		}
 		detail.Base.MaxSockets = base.MaxSockets
+		detail.Base.Durability = base.Durability
 		detail.Requirements.Strength = base.StrReq
 		detail.Requirements.Dexterity = base.DexReq
 	} else if item.BaseName != "" {
@@ -699,14 +702,17 @@ func (h *ItemHandler) convertSetItemToDTO(item *d2.SetItem, base *d2.ItemBase) *
 			ItemType: h.resolveItemTypeName(base.ItemType),
 		}
 		if base.MaxAC > 0 {
-			defense := base.MaxAC
-			detail.Base.Defense = &defense
+			detail.Base.Defense = &dto.DefenseRange{
+				Min: base.MinAC,
+				Max: base.MaxAC,
+			}
 		}
 		if base.MaxDam > 0 {
 			detail.Base.MinDamage = &base.MinDam
 			detail.Base.MaxDamage = &base.MaxDam
 		}
 		detail.Base.MaxSockets = base.MaxSockets
+		detail.Base.Durability = base.Durability
 		detail.Requirements.Strength = base.StrReq
 		detail.Requirements.Dexterity = base.DexReq
 	} else if item.BaseName != "" {

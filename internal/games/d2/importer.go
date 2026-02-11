@@ -429,6 +429,7 @@ func (i *Importer) importUniqueItems(ctx context.Context, catalogPath string) (I
 
 		// Parse properties
 		properties := parseProperties(r, 12, i.translator)
+		properties = combineAllAttributes(properties, i.translator)
 
 		// Parse ladder seasons
 		var firstSeason, lastSeason *int
@@ -494,9 +495,11 @@ func (i *Importer) importSets(ctx context.Context, catalogPath string) (ImportSt
 
 		// Parse partial bonuses (PCode2a-PCode5b)
 		partialBonuses := parseSetPartialBonuses(r, i.translator)
+		partialBonuses = combineAllAttributes(partialBonuses, i.translator)
 
 		// Parse full set bonuses (FCode1-FCode8)
 		fullBonuses := parseSetFullBonuses(r, i.translator)
+		fullBonuses = combineAllAttributes(fullBonuses, i.translator)
 
 		setBonus := &SetBonus{
 			IndexID:        idx,
@@ -540,9 +543,11 @@ func (i *Importer) importSetItems(ctx context.Context, catalogPath string) (Impo
 
 		// Parse base properties
 		properties := parseSetItemProperties(r, i.translator)
+		properties = combineAllAttributes(properties, i.translator)
 
 		// Parse bonus properties (activated by wearing more set items)
 		bonusProperties := parseSetItemBonusProperties(r, i.translator)
+		bonusProperties = combineAllAttributes(bonusProperties, i.translator)
 
 		setItem := &SetItem{
 			IndexID:         indexID,
@@ -619,6 +624,7 @@ func (i *Importer) importRunewords(ctx context.Context, catalogPath string) (Imp
 
 		// Parse properties
 		properties := parseRunewordProperties(r, i.translator)
+		properties = combineAllAttributes(properties, i.translator)
 
 		// Parse ladder seasons
 		var firstSeason, lastSeason *int
@@ -1126,6 +1132,74 @@ func parseSetItemBonusProperties(r parser.Row, translator *PropertyTranslator) [
 		}
 	}
 	return properties
+}
+
+// combineAllAttributes detects when str, dex, vit, and enr all share the same
+// min/max values and replaces them with a single "all-stats" property.
+// If values differ or not all 4 are present, the properties are returned unchanged.
+func combineAllAttributes(props []Property, translator *PropertyTranslator) []Property {
+	attrCodes := map[string]int{"str": -1, "dex": -1, "vit": -1, "enr": -1}
+	for i, p := range props {
+		if _, ok := attrCodes[p.Code]; ok {
+			attrCodes[p.Code] = i
+		}
+	}
+
+	// Check all 4 are present
+	for _, idx := range attrCodes {
+		if idx == -1 {
+			return props
+		}
+	}
+
+	// Check all share the same min/max
+	ref := props[attrCodes["str"]]
+	for _, code := range []string{"dex", "vit", "enr"} {
+		p := props[attrCodes[code]]
+		if p.Min != ref.Min || p.Max != ref.Max {
+			return props
+		}
+	}
+
+	// Build replacement: keep all non-attribute props, insert all-stats at first attribute position
+	firstIdx := len(props)
+	for _, idx := range attrCodes {
+		if idx < firstIdx {
+			firstIdx = idx
+		}
+	}
+
+	removeSet := map[int]bool{
+		attrCodes["str"]: true,
+		attrCodes["dex"]: true,
+		attrCodes["vit"]: true,
+		attrCodes["enr"]: true,
+	}
+
+	allStats := Property{
+		Code: "all-stats",
+		Min:  ref.Min,
+		Max:  ref.Max,
+	}
+	translator.EnrichProperty(&allStats)
+
+	result := make([]Property, 0, len(props)-3)
+	inserted := false
+	for i, p := range props {
+		if removeSet[i] {
+			if i == firstIdx {
+				result = append(result, allStats)
+				inserted = true
+			}
+			continue
+		}
+		result = append(result, p)
+	}
+	if !inserted {
+		result = append(result, allStats)
+	}
+
+	return result
 }
 
 func parseGemNameParts(name string) (gemType, quality string) {

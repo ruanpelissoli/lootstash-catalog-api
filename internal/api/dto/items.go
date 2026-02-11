@@ -55,14 +55,15 @@ type ItemRequirements struct {
 
 // ItemBaseInfo represents the base item information
 type ItemBaseInfo struct {
-	Code       string `json:"code"`
-	Name       string `json:"name"`
-	Category   string `json:"category"` // "armor", "weapon", "misc"
-	ItemType   string `json:"itemType"` // "helm", "body armor", etc.
-	Defense    *int   `json:"defense,omitempty"`
-	MinDamage  *int   `json:"minDamage,omitempty"`
-	MaxDamage  *int   `json:"maxDamage,omitempty"`
-	MaxSockets int    `json:"maxSockets,omitempty"`
+	Code       string        `json:"code"`
+	Name       string        `json:"name"`
+	Category   string        `json:"category"` // "armor", "weapon", "misc"
+	ItemType   string        `json:"itemType"` // "helm", "body armor", etc.
+	Defense    *DefenseRange `json:"defense,omitempty"`
+	MinDamage  *int          `json:"minDamage,omitempty"`
+	MaxDamage  *int          `json:"maxDamage,omitempty"`
+	MaxSockets int           `json:"maxSockets,omitempty"`
+	Durability int           `json:"durability,omitempty"`
 }
 
 // ItemQuality represents item quality flags

@@ -2,6 +2,7 @@ package d2
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -13,6 +14,24 @@ type PropertyTranslator struct {
 
 	// Skill tab names indexed by tab number
 	skillTabs map[int]string
+}
+
+// perLevelCodes maps per-level property codes to their display templates.
+// D2 formula: floor(clvl * raw_value / 8). Max level is 99.
+// Placeholders: {perLevel} = raw/8, {lvlMin} = floor(1*raw/8), {lvlMax} = floor(99*raw/8)
+var perLevelCodes = map[string]string{
+	"hp/lvl":    "({perLevel} Per Character Level) {lvlMin}-{lvlMax} To Life (Based On Character Level)",
+	"mana/lvl":  "({perLevel} Per Character Level) {lvlMin}-{lvlMax} To Mana (Based On Character Level)",
+	"str/lvl":   "({perLevel} Per Character Level) {lvlMin}-{lvlMax} To Strength (Based On Character Level)",
+	"dex/lvl":   "({perLevel} Per Character Level) {lvlMin}-{lvlMax} To Dexterity (Based On Character Level)",
+	"vit/lvl":   "({perLevel} Per Character Level) {lvlMin}-{lvlMax} To Vitality (Based On Character Level)",
+	"enr/lvl":   "({perLevel} Per Character Level) {lvlMin}-{lvlMax} To Energy (Based On Character Level)",
+	"ac/lvl":    "({perLevel} Per Character Level) {lvlMin}-{lvlMax} Defense (Based On Character Level)",
+	"ac%/lvl":   "({perLevel} Per Character Level) {lvlMin}-{lvlMax}% Enhanced Defense (Based On Character Level)",
+	"dmg%/lvl":  "({perLevel} Per Character Level) {lvlMin}-{lvlMax}% Enhanced Damage (Based On Character Level)",
+	"dmg/lvl":   "({perLevel} Per Character Level) {lvlMin}-{lvlMax} To Maximum Damage (Based On Character Level)",
+	"att/lvl":   "({perLevel} Per Character Level) {lvlMin}-{lvlMax} To Attack Rating (Based On Character Level)",
+	"att%/lvl":  "({perLevel} Per Character Level) {lvlMin}-{lvlMax}% To Attack Rating (Based On Character Level)",
 }
 
 // NewPropertyTranslator creates a new property translator with D2 property formats
@@ -222,6 +241,9 @@ func NewPropertyTranslator() *PropertyTranslator {
 			// Stamina
 			"stamdrain": "+{value}% Slower Stamina Drain",
 
+			// Vendor
+			"cheap": "Reduces All Vendor Prices {value}%",
+
 			// Additional
 			"addxp": "+{value}% To Experience Gained",
 		},
@@ -261,6 +283,37 @@ func NewPropertyTranslator() *PropertyTranslator {
 
 // Translate converts a property to human-readable text
 func (t *PropertyTranslator) Translate(prop Property) string {
+	// Handle per-level codes with D2 formula: floor(clvl * raw_value / 8)
+	if template, ok := perLevelCodes[prop.Code]; ok {
+		raw := prop.Min
+		if prop.Max > raw {
+			raw = prop.Max
+		}
+		perLevel := float64(raw) / 8.0
+		lvlMin := int(math.Floor(1.0 * float64(raw) / 8.0))
+		if lvlMin < 1 && raw > 0 {
+			lvlMin = 1
+		}
+		lvlMax := int(math.Floor(99.0 * float64(raw) / 8.0))
+
+		// Format perLevel: show as integer if whole, otherwise one decimal
+		var perLevelStr string
+		if perLevel == math.Floor(perLevel) {
+			perLevelStr = fmt.Sprintf("%d", int(perLevel))
+		} else {
+			perLevelStr = fmt.Sprintf("%.1f", perLevel)
+			// Trim trailing zeros after decimal
+			perLevelStr = strings.TrimRight(perLevelStr, "0")
+			perLevelStr = strings.TrimRight(perLevelStr, ".")
+		}
+
+		result := template
+		result = strings.ReplaceAll(result, "{perLevel}", perLevelStr)
+		result = strings.ReplaceAll(result, "{lvlMin}", fmt.Sprintf("%d", lvlMin))
+		result = strings.ReplaceAll(result, "{lvlMax}", fmt.Sprintf("%d", lvlMax))
+		return result
+	}
+
 	format, ok := t.formats[prop.Code]
 	if !ok {
 		// Fallback: return code with values
@@ -478,6 +531,19 @@ var fixedValueCodes = map[string]bool{
 	"pierce-immunity-poison": true,
 	"pierce-immunity-damage": true,
 	"pierce-immunity-magic":  true,
+	// Per-level bonuses (min/max are raw divisor values, not roll ranges)
+	"hp/lvl":   true,
+	"mana/lvl": true,
+	"str/lvl":  true,
+	"dex/lvl":  true,
+	"vit/lvl":  true,
+	"enr/lvl":  true,
+	"ac/lvl":   true,
+	"ac%/lvl":  true,
+	"dmg%/lvl": true,
+	"dmg/lvl":  true,
+	"att/lvl":  true,
+	"att%/lvl": true,
 }
 
 // EnrichProperty adds DisplayText and HasRange to a property
