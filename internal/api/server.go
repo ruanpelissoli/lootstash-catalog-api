@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/api/handlers"
+	"github.com/ruanpelissoli/lootstash-catalog-api/internal/api/middleware"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/games/d2"
 )
 
@@ -25,6 +26,11 @@ type Config struct {
 	ReadTimeout     time.Duration
 	WriteTimeout    time.Duration
 	AllowedOrigins  string
+	JWTSecret       string // HMAC (HS256) - legacy/testing
+	JWKSURL         string // ECDSA (ES256) - Supabase JWKS endpoint
+	JWTAudience     string // Expected "aud" claim
+	JWTIssuer       string // Expected "iss" claim
+	AuthDebug       bool   // Debug logging for auth
 }
 
 // DefaultConfig returns default server configuration
@@ -96,6 +102,10 @@ func (s *Server) setupRoutes() {
 	// D2 routes
 	d2Routes := v1.Group("/d2")
 	s.setupD2Routes(d2Routes)
+
+	// Admin routes
+	adminRoutes := v1.Group("/admin/d2")
+	s.setupAdminRoutes(adminRoutes)
 }
 
 func (s *Server) setupD2Routes(router fiber.Router) {
@@ -118,6 +128,7 @@ func (s *Server) setupD2Routes(router fiber.Router) {
 	items.Get("/rune/:id", itemHandler.GetRune)
 	items.Get("/gem/:id", itemHandler.GetGem)
 	items.Get("/base/:id", itemHandler.GetBase)
+	items.Get("/quest/:id", itemHandler.GetQuestItem)
 
 	// Collection endpoints - list all items by type
 	router.Get("/runes", itemHandler.GetAllRunes)
@@ -126,11 +137,35 @@ func (s *Server) setupD2Routes(router fiber.Router) {
 	router.Get("/uniques", itemHandler.GetAllUniques)
 	router.Get("/sets", itemHandler.GetAllSets)
 	router.Get("/runewords", itemHandler.GetAllRunewords)
+	router.Get("/quests", itemHandler.GetAllQuestItems)
+	router.Get("/classes", itemHandler.GetAllClasses)
 
 	// Reference data endpoints - for marketplace filtering
 	router.Get("/stats", itemHandler.GetAllStats)
 	router.Get("/categories", itemHandler.GetAllCategories)
 	router.Get("/rarities", itemHandler.GetAllRarities)
+}
+
+func (s *Server) setupAdminRoutes(router fiber.Router) {
+	authConfig := middleware.AuthConfig{
+		JWTSecret: s.config.JWTSecret,
+		JWKSURL:   s.config.JWKSURL,
+		Audience:  s.config.JWTAudience,
+		Issuer:    s.config.JWTIssuer,
+		Debug:     s.config.AuthDebug,
+	}
+	router.Use(middleware.NewAuthMiddleware(authConfig))
+	router.Use(middleware.AdminMiddleware(s.repo))
+
+	adminHandler := handlers.NewAdminHandler(s.repo)
+
+	router.Post("/classes", adminHandler.CreateClass)
+	router.Put("/classes/:classId", adminHandler.UpdateClass)
+
+	items := router.Group("/items")
+	items.Post("/:type", adminHandler.CreateItem)
+	items.Put("/:type/:id", adminHandler.UpdateItem)
+	items.Delete("/:type/:id", adminHandler.DeleteItem)
 }
 
 // Start starts the HTTP server

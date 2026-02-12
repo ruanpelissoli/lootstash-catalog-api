@@ -13,6 +13,8 @@ Base URL: `http://localhost:8080`
   - [List All Unique Items](#list-all-unique-items)
   - [List All Set Items](#list-all-set-items)
   - [List All Runewords](#list-all-runewords)
+  - [List All Quest Items](#list-all-quest-items)
+  - [List All Classes](#list-all-classes)
 - [Item Detail Endpoints](#item-detail-endpoints)
   - [Get Item by Type and ID](#get-item-by-type-and-id)
   - [Get Unique Item](#get-unique-item)
@@ -22,10 +24,17 @@ Base URL: `http://localhost:8080`
   - [Get Rune](#get-rune)
   - [Get Gem](#get-gem)
   - [Get Base Item](#get-base-item)
+  - [Get Quest Item](#get-quest-item)
 - [Reference Data](#reference-data)
   - [List All Stat Codes](#list-all-stat-codes)
   - [List All Categories](#list-all-categories)
   - [List All Rarities](#list-all-rarities)
+- [Admin Endpoints (Authenticated)](#admin-endpoints-authenticated)
+  - [Create Item](#create-item)
+  - [Update Item](#update-item)
+  - [Delete Item](#delete-item)
+  - [Create Class](#create-class)
+  - [Update Class](#update-class)
 - [Response Types](#response-types)
 - [Error Handling](#error-handling)
 
@@ -104,7 +113,7 @@ curl "http://localhost:8080/api/v1/d2/items/search?q=shako&limit=10"
 |------------|--------|-------------------------------------------------------|
 | `id`       | string | Item ID (use with detail endpoints)                   |
 | `name`     | string | Item name                                             |
-| `type`     | string | One of: `unique`, `set`, `runeword`, `rune`, `gem`, `base` |
+| `type`     | string | One of: `unique`, `set`, `runeword`, `rune`, `gem`, `base`, `quest` |
 | `category` | string | Item category (e.g., "helm", "armor", "weapon")       |
 | `imageUrl` | string | URL to item image (optional)                          |
 | `baseName` | string | Base item name for uniques/sets (optional)            |
@@ -414,6 +423,80 @@ curl "http://localhost:8080/api/v1/d2/runewords"
 
 ---
 
+### List All Quest Items
+
+Get all quest items.
+
+```
+GET /api/v1/d2/quests
+```
+
+### Example Request
+
+```bash
+curl "http://localhost:8080/api/v1/d2/quests"
+```
+
+### Response
+
+```json
+[
+  {
+    "id": 1,
+    "code": "bks",
+    "name": "Scroll of Inifuss",
+    "description": "A bark scroll covered in Druidic runes",
+    "type": "Quest",
+    "rarity": "Quest",
+    "imageUrl": "https://..."
+  }
+]
+```
+
+---
+
+### List All Classes
+
+Get all character classes with their skill trees.
+
+```
+GET /api/v1/d2/classes
+```
+
+### Example Request
+
+```bash
+curl "http://localhost:8080/api/v1/d2/classes"
+```
+
+### Response
+
+```json
+[
+  {
+    "id": "amazon",
+    "name": "Amazon",
+    "skillSuffix": "Skills",
+    "skillTrees": [
+      {
+        "name": "Javelin and Spear Skills",
+        "skills": ["Jab", "Power Strike", "Poison Javelin"]
+      },
+      {
+        "name": "Passive and Magic Skills",
+        "skills": ["Inner Sight", "Critical Strike", "Dodge"]
+      },
+      {
+        "name": "Bow and Crossbow Skills",
+        "skills": ["Magic Arrow", "Fire Arrow", "Cold Arrow"]
+      }
+    ]
+  }
+]
+```
+
+---
+
 ## Item Detail Endpoints
 
 ### Get Item by Type and ID
@@ -428,7 +511,7 @@ GET /api/v1/d2/items/:type/:id
 
 | Parameter | Type   | Required | Description                                              |
 |-----------|--------|----------|----------------------------------------------------------|
-| `type`    | string | Yes      | One of: `unique`, `set`, `runeword`, `rune`, `gem`, `base` |
+| `type`    | string | Yes      | One of: `unique`, `set`, `runeword`, `rune`, `gem`, `base`, `quest` |
 | `id`      | number | Yes      | Item ID                                                  |
 
 ### Example Request
@@ -769,6 +852,345 @@ curl "http://localhost:8080/api/v1/d2/items/base/100"
 
 ---
 
+### Get Quest Item
+
+```
+GET /api/v1/d2/items/quest/:id
+```
+
+### Path Parameters
+
+| Parameter | Type   | Required | Description    |
+|-----------|--------|----------|----------------|
+| `id`      | number | Yes      | Quest item ID  |
+
+### Example Request
+
+```bash
+curl "http://localhost:8080/api/v1/d2/items/quest/1"
+```
+
+### Response
+
+```json
+{
+  "itemType": "quest",
+  "quest": {
+    "id": 1,
+    "code": "bks",
+    "name": "Scroll of Inifuss",
+    "description": "A bark scroll covered in Druidic runes",
+    "type": "Quest",
+    "rarity": "Quest",
+    "imageUrl": "https://..."
+  }
+}
+```
+
+---
+
+## Admin Endpoints (Authenticated)
+
+All admin endpoints require a valid Supabase JWT token in the `Authorization` header and the user must have `is_admin = true` in the `d2.profiles` table.
+
+### Authentication
+
+```
+Authorization: Bearer <supabase-jwt-token>
+```
+
+Requests without a valid token return `401 Unauthorized`. Requests from non-admin users return `403 Forbidden`.
+
+---
+
+### Create Item
+
+Create a new item of any supported type.
+
+```
+POST /api/v1/admin/d2/items/:type
+```
+
+### Path Parameters
+
+| Parameter | Type   | Required | Description                                              |
+|-----------|--------|----------|----------------------------------------------------------|
+| `type`    | string | Yes      | One of: `unique`, `set`, `runeword`, `rune`, `gem`, `base`, `quest` |
+
+### Request Bodies by Type
+
+**Unique Item** (`type = unique`)
+
+```json
+{
+  "name": "Griffon's Eye",
+  "baseCode": "urn",
+  "levelReq": 76,
+  "ladderOnly": false,
+  "properties": [
+    { "code": "allskills", "min": 1, "max": 1 },
+    { "code": "fcr", "min": 25, "max": 25 }
+  ],
+  "imageUrl": "https://..."
+}
+```
+
+**Set Item** (`type = set`)
+
+```json
+{
+  "name": "Tal Rasha's Horadric Crest",
+  "setName": "Tal Rasha's Wrappings",
+  "baseCode": "urn",
+  "levelReq": 66,
+  "properties": [
+    { "code": "lifesteal", "min": 10, "max": 10 }
+  ],
+  "bonusProperties": [
+    { "code": "hp", "min": 65, "max": 65 }
+  ],
+  "imageUrl": "https://..."
+}
+```
+
+**Runeword** (`type = runeword`)
+
+```json
+{
+  "name": "Runeword123",
+  "displayName": "Spirit",
+  "ladderOnly": false,
+  "validItemTypes": ["swor", "shie"],
+  "runes": ["r07", "r09", "r11", "r22"],
+  "properties": [
+    { "code": "allskills", "min": 2, "max": 2 },
+    { "code": "fcr", "min": 25, "max": 35 }
+  ],
+  "imageUrl": "https://..."
+}
+```
+
+**Rune** (`type = rune`)
+
+```json
+{
+  "code": "r30",
+  "name": "Ber Rune",
+  "runeNumber": 30,
+  "levelReq": 63,
+  "weaponMods": [
+    { "code": "crush", "min": 20, "max": 20 }
+  ],
+  "armorMods": [
+    { "code": "dmg%", "min": 8, "max": 8 }
+  ],
+  "shieldMods": [
+    { "code": "dmg%", "min": 8, "max": 8 }
+  ],
+  "imageUrl": "https://..."
+}
+```
+
+**Gem** (`type = gem`)
+
+```json
+{
+  "code": "gpw",
+  "name": "Perfect Amethyst",
+  "gemType": "amethyst",
+  "quality": "perfect",
+  "weaponMods": [
+    { "code": "att", "min": 150, "max": 150 }
+  ],
+  "armorMods": [
+    { "code": "str", "min": 10, "max": 10 }
+  ],
+  "shieldMods": [
+    { "code": "str", "min": 10, "max": 10 }
+  ],
+  "imageUrl": "https://..."
+}
+```
+
+**Base Item** (`type = base`)
+
+```json
+{
+  "code": "uap",
+  "name": "Shako",
+  "category": "armor",
+  "itemType": "helm",
+  "levelReq": 43,
+  "strReq": 50,
+  "dexReq": 0,
+  "minAc": 98,
+  "maxAc": 141,
+  "minDam": 0,
+  "maxDam": 0,
+  "twoHandMinDam": 0,
+  "twoHandMaxDam": 0,
+  "maxSockets": 2,
+  "durability": 12,
+  "speed": 0,
+  "imageUrl": "https://..."
+}
+```
+
+**Quest Item** (`type = quest`)
+
+```json
+{
+  "code": "bks",
+  "name": "Scroll of Inifuss",
+  "description": "A bark scroll covered in Druidic runes",
+  "imageUrl": "https://..."
+}
+```
+
+### Response
+
+Returns `201 Created` with the created item.
+
+---
+
+### Update Item
+
+Update an existing item by type and ID.
+
+```
+PUT /api/v1/admin/d2/items/:type/:id
+```
+
+### Path Parameters
+
+| Parameter | Type   | Required | Description                                              |
+|-----------|--------|----------|----------------------------------------------------------|
+| `type`    | string | Yes      | One of: `unique`, `set`, `runeword`, `rune`, `gem`, `base`, `quest` |
+| `id`      | number | Yes      | Item ID                                                  |
+
+### Request Body
+
+Same structure as the corresponding Create request body for each type.
+
+### Response
+
+Returns `200 OK` with the updated item.
+
+---
+
+### Delete Item
+
+Delete an item. Only quest items support deletion.
+
+```
+DELETE /api/v1/admin/d2/items/:type/:id
+```
+
+### Path Parameters
+
+| Parameter | Type   | Required | Description                                              |
+|-----------|--------|----------|----------------------------------------------------------|
+| `type`    | string | Yes      | Must be `quest`                                          |
+| `id`      | number | Yes      | Item ID                                                  |
+
+### Response
+
+Returns `204 No Content` on success.
+
+### Error Response
+
+```json
+{
+  "error": "bad_request",
+  "message": "Delete is only supported for quest items",
+  "code": 400
+}
+```
+
+---
+
+### Create Class
+
+Create a new character class.
+
+```
+POST /api/v1/admin/d2/classes
+```
+
+### Request Body
+
+```json
+{
+  "id": "amazon",
+  "name": "Amazon",
+  "skillSuffix": "Skills",
+  "skillTrees": [
+    {
+      "name": "Javelin and Spear Skills",
+      "skills": ["Jab", "Power Strike", "Poison Javelin"]
+    },
+    {
+      "name": "Passive and Magic Skills",
+      "skills": ["Inner Sight", "Critical Strike", "Dodge"]
+    },
+    {
+      "name": "Bow and Crossbow Skills",
+      "skills": ["Magic Arrow", "Fire Arrow", "Cold Arrow"]
+    }
+  ]
+}
+```
+
+### Response
+
+Returns `201 Created` with the created class.
+
+```json
+{
+  "id": "amazon",
+  "name": "Amazon",
+  "skillSuffix": "Skills",
+  "skillTrees": [ ... ]
+}
+```
+
+---
+
+### Update Class
+
+Update an existing character class.
+
+```
+PUT /api/v1/admin/d2/classes/:classId
+```
+
+### Path Parameters
+
+| Parameter | Type   | Required | Description |
+|-----------|--------|----------|-------------|
+| `classId` | string | Yes      | Class ID    |
+
+### Request Body
+
+```json
+{
+  "name": "Amazon",
+  "skillSuffix": "Skills",
+  "skillTrees": [
+    {
+      "name": "Javelin and Spear Skills",
+      "skills": ["Jab", "Power Strike", "Poison Javelin"]
+    }
+  ]
+}
+```
+
+### Response
+
+Returns `200 OK` with the updated class.
+
+---
+
 ## Response Types
 
 ### UnifiedItemDetail
@@ -777,13 +1199,14 @@ Wrapper object returned by all detail endpoints. Only one of the item-specific f
 
 ```typescript
 interface UnifiedItemDetail {
-  itemType: "unique" | "set" | "runeword" | "rune" | "gem" | "base";
+  itemType: "unique" | "set" | "runeword" | "rune" | "gem" | "base" | "quest";
   unique?: UniqueItemDetail;
   setItem?: SetItemDetail;
   runeword?: RunewordDetail;
   rune?: RuneDetail;
   gem?: GemDetail;
   base?: BaseItemDetail;
+  quest?: QuestItemDetail;
 }
 ```
 
@@ -895,6 +1318,47 @@ interface RunewordValidType {
 }
 ```
 
+### QuestItemDetail
+
+```typescript
+interface QuestItemDetail {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  type: string;         // "Quest"
+  rarity: string;       // "Quest"
+  imageUrl?: string;
+}
+```
+
+### ClassDetail
+
+```typescript
+interface ClassDetail {
+  id: string;
+  name: string;
+  skillSuffix: string;
+  skillTrees: SkillTree[];
+}
+
+interface SkillTree {
+  name: string;
+  skills: string[];
+}
+```
+
+### PropertyInput (Admin Requests)
+
+```typescript
+interface PropertyInput {
+  code: string;         // Stat code (e.g., "allskills", "fcr")
+  param?: string;       // Optional parameter (e.g., class name for class skills)
+  min: number;          // Minimum value
+  max: number;          // Maximum value (same as min for fixed stats)
+}
+```
+
 ---
 
 ## Error Handling
@@ -914,6 +1378,8 @@ All errors return a consistent JSON structure:
 | HTTP Code | Error Type       | Description                           |
 |-----------|------------------|---------------------------------------|
 | 400       | `bad_request`    | Invalid parameters or missing required fields |
+| 401       | `unauthorized`   | Missing or invalid JWT token (admin endpoints) |
+| 403       | `forbidden`      | User is not an admin (admin endpoints) |
 | 404       | `not_found`      | Item not found                        |
 | 500       | `internal_error` | Server error                          |
 
@@ -933,9 +1399,10 @@ All errors return a consistent JSON structure:
 
 ### Request Headers
 
-| Header         | Required | Description                    |
-|----------------|----------|--------------------------------|
-| `Content-Type` | No       | Not required for GET requests  |
+| Header          | Required | Description                                          |
+|-----------------|----------|------------------------------------------------------|
+| `Content-Type`  | No       | `application/json` for POST/PUT requests             |
+| `Authorization` | Admin only | `Bearer <token>` - Required for `/admin/` endpoints |
 
 ### Response Headers
 
@@ -1228,25 +1695,33 @@ curl "http://localhost:8080/api/v1/d2/rarities"
 
 ## Quick Reference
 
-| Method | Endpoint                              | Description                          |
-|--------|---------------------------------------|--------------------------------------|
-| GET    | `/health`                             | Health check                         |
-| GET    | `/api/v1/d2/items/search`             | Search all items                     |
-| GET    | `/api/v1/d2/stats`                    | List all filterable stat codes       |
-| GET    | `/api/v1/d2/categories`               | List all item categories             |
-| GET    | `/api/v1/d2/rarities`                 | List all item rarities               |
-| GET    | `/api/v1/d2/runes`                    | List all runes                       |
-| GET    | `/api/v1/d2/gems`                     | List all gems                        |
-| GET    | `/api/v1/d2/bases`                    | List all base items                  |
-| GET    | `/api/v1/d2/bases?runeword=:id`       | List bases valid for a runeword      |
-| GET    | `/api/v1/d2/uniques`                  | List all unique items                |
-| GET    | `/api/v1/d2/sets`                     | List all set items                   |
-| GET    | `/api/v1/d2/runewords`                | List all runewords                   |
-| GET    | `/api/v1/d2/items/:type/:id`          | Get item by type and ID              |
-| GET    | `/api/v1/d2/items/unique/:id`         | Get unique item detail               |
-| GET    | `/api/v1/d2/items/set/:id`            | Get set item detail                  |
-| GET    | `/api/v1/d2/items/runeword/:id`       | Get runeword detail                  |
-| GET    | `/api/v1/d2/items/runeword/:id/bases` | Get valid bases for a runeword       |
-| GET    | `/api/v1/d2/items/rune/:id`           | Get rune detail                      |
-| GET    | `/api/v1/d2/items/gem/:id`            | Get gem detail                       |
-| GET    | `/api/v1/d2/items/base/:id`           | Get base item detail                 |
+| Method | Endpoint                              | Auth     | Description                          |
+|--------|---------------------------------------|----------|--------------------------------------|
+| GET    | `/health`                             | No       | Health check                         |
+| GET    | `/api/v1/d2/items/search`             | No       | Search all items                     |
+| GET    | `/api/v1/d2/stats`                    | No       | List all filterable stat codes       |
+| GET    | `/api/v1/d2/categories`               | No       | List all item categories             |
+| GET    | `/api/v1/d2/rarities`                 | No       | List all item rarities               |
+| GET    | `/api/v1/d2/runes`                    | No       | List all runes                       |
+| GET    | `/api/v1/d2/gems`                     | No       | List all gems                        |
+| GET    | `/api/v1/d2/bases`                    | No       | List all base items                  |
+| GET    | `/api/v1/d2/bases?runeword=:id`       | No       | List bases valid for a runeword      |
+| GET    | `/api/v1/d2/uniques`                  | No       | List all unique items                |
+| GET    | `/api/v1/d2/sets`                     | No       | List all set items                   |
+| GET    | `/api/v1/d2/runewords`                | No       | List all runewords                   |
+| GET    | `/api/v1/d2/quests`                   | No       | List all quest items                 |
+| GET    | `/api/v1/d2/classes`                  | No       | List all character classes           |
+| GET    | `/api/v1/d2/items/:type/:id`          | No       | Get item by type and ID              |
+| GET    | `/api/v1/d2/items/unique/:id`         | No       | Get unique item detail               |
+| GET    | `/api/v1/d2/items/set/:id`            | No       | Get set item detail                  |
+| GET    | `/api/v1/d2/items/runeword/:id`       | No       | Get runeword detail                  |
+| GET    | `/api/v1/d2/items/runeword/:id/bases` | No       | Get valid bases for a runeword       |
+| GET    | `/api/v1/d2/items/rune/:id`           | No       | Get rune detail                      |
+| GET    | `/api/v1/d2/items/gem/:id`            | No       | Get gem detail                       |
+| GET    | `/api/v1/d2/items/base/:id`           | No       | Get base item detail                 |
+| GET    | `/api/v1/d2/items/quest/:id`          | No       | Get quest item detail                |
+| POST   | `/api/v1/admin/d2/items/:type`        | Admin    | Create item                          |
+| PUT    | `/api/v1/admin/d2/items/:type/:id`    | Admin    | Update item                          |
+| DELETE | `/api/v1/admin/d2/items/:type/:id`    | Admin    | Delete item (quest only)             |
+| POST   | `/api/v1/admin/d2/classes`            | Admin    | Create class                         |
+| PUT    | `/api/v1/admin/d2/classes/:classId`   | Admin    | Update class                         |

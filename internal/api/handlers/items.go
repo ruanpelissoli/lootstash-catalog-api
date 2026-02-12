@@ -435,10 +435,24 @@ func (h *ItemHandler) GetItem(c *fiber.Ctx) error {
 			Base:     h.convertBaseToDTO(item, itemTypeInfo),
 		})
 
+	case "quest":
+		item, err := h.repo.GetItemBase(c.Context(), id)
+		if err != nil || !item.QuestItem {
+			return c.Status(fiber.StatusNotFound).JSON(dto.ErrorResponse{
+				Error:   "not_found",
+				Message: "Quest item not found",
+				Code:    404,
+			})
+		}
+		return c.JSON(dto.UnifiedItemDetail{
+			ItemType: "quest",
+			Quest:    h.convertQuestToDTO(item),
+		})
+
 	default:
 		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
 			Error:   "bad_request",
-			Message: "Invalid item type. Must be one of: unique, set, runeword, rune, gem, base",
+			Message: "Invalid item type. Must be one of: unique, set, runeword, rune, gem, base, quest",
 			Code:    400,
 		})
 	}
@@ -978,4 +992,99 @@ func (h *ItemHandler) GetAllRarities(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(results)
+}
+
+// GetQuestItem handles quest item detail requests
+// GET /api/d2/items/quest/:id
+func (h *ItemHandler) GetQuestItem(c *fiber.Ctx) error {
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
+			Error:   "bad_request",
+			Message: "Invalid item ID",
+			Code:    400,
+		})
+	}
+
+	item, err := h.repo.GetItemBase(c.Context(), id)
+	if err != nil || !item.QuestItem {
+		return c.Status(fiber.StatusNotFound).JSON(dto.ErrorResponse{
+			Error:   "not_found",
+			Message: "Quest item not found",
+			Code:    404,
+		})
+	}
+
+	return c.JSON(dto.UnifiedItemDetail{
+		ItemType: "quest",
+		Quest:    h.convertQuestToDTO(item),
+	})
+}
+
+// GetAllQuestItems returns all quest items
+// GET /api/d2/quests
+func (h *ItemHandler) GetAllQuestItems(c *fiber.Ctx) error {
+	items, err := h.repo.GetAllQuestItems(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
+			Error:   "internal_error",
+			Message: "Failed to get quest items",
+			Code:    500,
+		})
+	}
+
+	results := make([]*dto.QuestItemDetail, 0, len(items))
+	for _, item := range items {
+		results = append(results, h.convertQuestToDTO(&item))
+	}
+
+	return c.JSON(results)
+}
+
+// GetAllClasses returns all character classes
+// GET /api/d2/classes
+func (h *ItemHandler) GetAllClasses(c *fiber.Ctx) error {
+	classes, err := h.repo.GetAllClasses(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
+			Error:   "internal_error",
+			Message: "Failed to get classes",
+			Code:    500,
+		})
+	}
+
+	results := make([]dto.ClassDetail, 0, len(classes))
+	for _, cls := range classes {
+		results = append(results, convertClassToDTO(&cls))
+	}
+
+	return c.JSON(results)
+}
+
+func (h *ItemHandler) convertQuestToDTO(item *d2.ItemBase) *dto.QuestItemDetail {
+	return &dto.QuestItemDetail{
+		ID:          item.ID,
+		Code:        item.Code,
+		Name:        item.Name,
+		Description: item.Description,
+		Type:        "Quest",
+		Rarity:      "Quest",
+		ImageURL:    item.ImageURL,
+	}
+}
+
+func convertClassToDTO(cls *d2.Class) dto.ClassDetail {
+	trees := make([]dto.SkillTreeDTO, 0, len(cls.SkillTrees))
+	for _, st := range cls.SkillTrees {
+		trees = append(trees, dto.SkillTreeDTO{
+			Name:   st.Name,
+			Skills: st.Skills,
+		})
+	}
+	return dto.ClassDetail{
+		ID:          cls.ID,
+		Name:        cls.Name,
+		SkillSuffix: cls.SkillSuffix,
+		SkillTrees:  trees,
+	}
 }

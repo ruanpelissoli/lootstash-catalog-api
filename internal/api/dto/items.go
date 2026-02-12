@@ -221,10 +221,35 @@ type QualityTiers struct {
 	Elite       string `json:"elite,omitempty"`
 }
 
+// QuestItemDetail represents a quest item
+type QuestItemDetail struct {
+	ID          int    `json:"id"`
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Type        string `json:"type"`   // "quest"
+	Rarity      string `json:"rarity"` // "quest"
+	ImageURL    string `json:"imageUrl,omitempty"`
+}
+
+// ClassDetail represents a character class with skill trees
+type ClassDetail struct {
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	SkillSuffix string         `json:"skillSuffix"`
+	SkillTrees  []SkillTreeDTO `json:"skillTrees"`
+}
+
+// SkillTreeDTO represents a skill tree in the API response
+type SkillTreeDTO struct {
+	Name   string   `json:"name"`
+	Skills []string `json:"skills"`
+}
+
 // UnifiedItemDetail is a wrapper that can contain any item type
 // This is what the UI receives for a specific item
 type UnifiedItemDetail struct {
-	ItemType string `json:"itemType"` // "unique", "set", "runeword", "rune", "gem", "base"
+	ItemType string `json:"itemType"` // "unique", "set", "runeword", "rune", "gem", "base", "quest"
 
 	// Only one of these will be populated based on ItemType
 	Unique   *UniqueItemDetail  `json:"unique,omitempty"`
@@ -233,6 +258,7 @@ type UnifiedItemDetail struct {
 	Rune     *RuneDetail        `json:"rune,omitempty"`
 	Gem      *GemDetail         `json:"gem,omitempty"`
 	Base     *BaseItemDetail    `json:"base,omitempty"`
+	Quest    *QuestItemDetail   `json:"quest,omitempty"`
 }
 
 // AffixFilter represents a filter for affix values (for marketplace future use)
@@ -290,4 +316,114 @@ type Rarity struct {
 	Name        string `json:"name"`        // Display name (e.g., "Unique", "Set", "Runeword")
 	Color       string `json:"color"`       // Hex color for UI display (e.g., "#C4A000" for unique gold)
 	Description string `json:"description"` // Brief description of this rarity type
+}
+
+// Admin request DTOs
+
+// PropertyInput represents a property in create/update requests
+type PropertyInput struct {
+	Code  string `json:"code"`
+	Param string `json:"param,omitempty"`
+	Min   int    `json:"min"`
+	Max   int    `json:"max"`
+}
+
+// CreateUniqueItemRequest represents the request body for creating/updating a unique item
+type CreateUniqueItemRequest struct {
+	Name       string          `json:"name"`
+	BaseCode   string          `json:"baseCode"`
+	LevelReq   int             `json:"levelReq"`
+	LadderOnly bool            `json:"ladderOnly"`
+	Properties []PropertyInput `json:"properties"`
+	ImageURL   string          `json:"imageUrl,omitempty"`
+}
+
+// CreateSetItemRequest represents the request body for creating/updating a set item
+type CreateSetItemRequest struct {
+	Name            string          `json:"name"`
+	SetName         string          `json:"setName"`
+	BaseCode        string          `json:"baseCode"`
+	LevelReq        int             `json:"levelReq"`
+	Properties      []PropertyInput `json:"properties"`
+	BonusProperties []PropertyInput `json:"bonusProperties"`
+	ImageURL        string          `json:"imageUrl,omitempty"`
+}
+
+// CreateRunewordRequest represents the request body for creating/updating a runeword
+type CreateRunewordRequest struct {
+	Name           string          `json:"name"`
+	DisplayName    string          `json:"displayName"`
+	LadderOnly     bool            `json:"ladderOnly"`
+	ValidItemTypes []string        `json:"validItemTypes"`
+	Runes          []string        `json:"runes"`
+	Properties     []PropertyInput `json:"properties"`
+	ImageURL       string          `json:"imageUrl,omitempty"`
+}
+
+// CreateRuneRequest represents the request body for creating/updating a rune
+type CreateRuneRequest struct {
+	Code       string          `json:"code"`
+	Name       string          `json:"name"`
+	RuneNumber int             `json:"runeNumber"`
+	LevelReq   int             `json:"levelReq"`
+	WeaponMods []PropertyInput `json:"weaponMods"`
+	ArmorMods  []PropertyInput `json:"armorMods"`
+	ShieldMods []PropertyInput `json:"shieldMods"`
+	ImageURL   string          `json:"imageUrl,omitempty"`
+}
+
+// CreateGemRequest represents the request body for creating/updating a gem
+type CreateGemRequest struct {
+	Code       string          `json:"code"`
+	Name       string          `json:"name"`
+	GemType    string          `json:"gemType"`
+	Quality    string          `json:"quality"`
+	WeaponMods []PropertyInput `json:"weaponMods"`
+	ArmorMods  []PropertyInput `json:"armorMods"`
+	ShieldMods []PropertyInput `json:"shieldMods"`
+	ImageURL   string          `json:"imageUrl,omitempty"`
+}
+
+// CreateBaseItemRequest represents the request body for creating/updating a base item
+type CreateBaseItemRequest struct {
+	Code           string `json:"code"`
+	Name           string `json:"name"`
+	Category       string `json:"category"`
+	ItemType       string `json:"itemType"`
+	LevelReq       int    `json:"levelReq"`
+	StrReq         int    `json:"strReq"`
+	DexReq         int    `json:"dexReq"`
+	MinAC          int    `json:"minAc"`
+	MaxAC          int    `json:"maxAc"`
+	MinDam         int    `json:"minDam"`
+	MaxDam         int    `json:"maxDam"`
+	TwoHandMinDam  int    `json:"twoHandMinDam"`
+	TwoHandMaxDam  int    `json:"twoHandMaxDam"`
+	MaxSockets     int    `json:"maxSockets"`
+	Durability     int    `json:"durability"`
+	Speed          int    `json:"speed"`
+	ImageURL       string `json:"imageUrl,omitempty"`
+}
+
+// CreateQuestItemRequest represents the request body for creating/updating a quest item
+type CreateQuestItemRequest struct {
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	ImageURL    string `json:"imageUrl,omitempty"`
+}
+
+// CreateClassRequest represents the request body for creating a class
+type CreateClassRequest struct {
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	SkillSuffix string         `json:"skillSuffix"`
+	SkillTrees  []SkillTreeDTO `json:"skillTrees"`
+}
+
+// UpdateClassRequest represents the request body for updating a class
+type UpdateClassRequest struct {
+	Name        string         `json:"name"`
+	SkillSuffix string         `json:"skillSuffix"`
+	SkillTrees  []SkillTreeDTO `json:"skillTrees"`
 }

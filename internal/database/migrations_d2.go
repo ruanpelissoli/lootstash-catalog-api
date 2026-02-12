@@ -360,6 +360,32 @@ CREATE INDEX IF NOT EXISTS idx_unique_items_properties ON d2.unique_items USING 
 CREATE INDEX IF NOT EXISTS idx_set_items_properties ON d2.set_items USING GIN (properties);
 CREATE INDEX IF NOT EXISTS idx_runewords_properties ON d2.runewords USING GIN (properties);
 CREATE INDEX IF NOT EXISTS idx_affixes_valid_types ON d2.affixes USING GIN (valid_item_types);
+
+-- Profiles for auth (UUID matches Supabase auth.users.id)
+CREATE TABLE IF NOT EXISTS d2.profiles (
+    id UUID PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    is_admin BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON d2.profiles(email);
+
+-- Classes with skill trees
+CREATE TABLE IF NOT EXISTS d2.classes (
+    id VARCHAR(20) PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    skill_suffix VARCHAR(100) NOT NULL DEFAULT '',
+    skill_trees JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Description column for quest items
+ALTER TABLE d2.item_bases ADD COLUMN IF NOT EXISTS description TEXT;
+
+-- Index for quest item lookups
+CREATE INDEX IF NOT EXISTS idx_item_bases_quest ON d2.item_bases(quest_item) WHERE quest_item = true;
 `
 
 func (db *DB) MigrateD2(ctx context.Context) error {

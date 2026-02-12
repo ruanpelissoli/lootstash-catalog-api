@@ -128,6 +128,19 @@ func (r *Repository) SearchItems(ctx context.Context, query string, limit int) (
 			WHERE spawnable = true AND tradable = true AND LOWER(name) LIKE $1
 				AND NOT EXISTS (SELECT 1 FROM d2.gems g WHERE g.code = item_bases.code)
 				AND NOT EXISTS (SELECT 1 FROM d2.runes r WHERE r.code = item_bases.code)
+
+			UNION ALL
+
+			-- Quest items
+			SELECT
+				id,
+				name,
+				'quest' as type,
+				'Quest' as category,
+				NULL as base_name,
+				image_url
+			FROM d2.item_bases
+			WHERE quest_item = true AND LOWER(name) LIKE $1
 		)
 		SELECT id, name, type, category, base_name, image_url
 		FROM all_items
@@ -474,14 +487,14 @@ func (r *Repository) GetItemBase(ctx context.Context, id int) (*ItemBase, error)
 			normal_code, exceptional_code, elite_code,
 			inv_width, inv_height, inv_file, flippy_file, unique_inv_file, set_inv_file,
 			image_url, icon_variants, spawnable, stackable, useable, throwable, quest_item,
-			rarity, cost, created_at, updated_at
+			rarity, cost, description, created_at, updated_at
 		FROM d2.item_bases
 		WHERE id = $1
 	`
 
 	var ib ItemBase
 	var itemType2, normalCode, exceptionalCode, eliteCode *string
-	var invFile, flippyFile, uniqueInvFile, setInvFile, imageURL *string
+	var invFile, flippyFile, uniqueInvFile, setInvFile, imageURL, description *string
 
 	err := r.pool.QueryRow(ctx, sql, id).Scan(
 		&ib.ID, &ib.Code, &ib.Name, &ib.ItemType, &itemType2, &ib.Category,
@@ -492,7 +505,7 @@ func (r *Repository) GetItemBase(ctx context.Context, id int) (*ItemBase, error)
 		&normalCode, &exceptionalCode, &eliteCode,
 		&ib.InvWidth, &ib.InvHeight, &invFile, &flippyFile, &uniqueInvFile, &setInvFile,
 		&imageURL, &ib.IconVariants, &ib.Spawnable, &ib.Stackable, &ib.Useable, &ib.Throwable, &ib.QuestItem,
-		&ib.Rarity, &ib.Cost, &ib.CreatedAt, &ib.UpdatedAt,
+		&ib.Rarity, &ib.Cost, &description, &ib.CreatedAt, &ib.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("get item base failed: %w", err)
@@ -524,6 +537,9 @@ func (r *Repository) GetItemBase(ctx context.Context, id int) (*ItemBase, error)
 	}
 	if imageURL != nil {
 		ib.ImageURL = *imageURL
+	}
+	if description != nil {
+		ib.Description = *description
 	}
 
 	return &ib, nil
@@ -769,6 +785,8 @@ func (r *Repository) CountSearchResults(ctx context.Context, query string) (int,
 			SELECT id FROM d2.item_bases WHERE spawnable = true AND tradable = true AND LOWER(name) LIKE $1
 				AND NOT EXISTS (SELECT 1 FROM d2.gems g WHERE g.code = item_bases.code)
 				AND NOT EXISTS (SELECT 1 FROM d2.runes r WHERE r.code = item_bases.code)
+			UNION ALL
+			SELECT id FROM d2.item_bases WHERE quest_item = true AND LOWER(name) LIKE $1
 		) AS all_items
 	`
 

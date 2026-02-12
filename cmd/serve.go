@@ -67,9 +67,15 @@ func runServe(cmd *cobra.Command, args []string) error {
 	repo := d2.NewRepository(db.Pool())
 
 	// Create server config
+	supabaseURL := getEnvOrDefault("SUPABASE_URL", "")
 	config := &api.Config{
 		Port:           port,
 		AllowedOrigins: allowedOrigins,
+		JWTSecret:      getEnvOrDefault("SUPABASE_JWT_SECRET", ""),
+		JWKSURL:        supabaseURL + "/auth/v1/.well-known/jwks.json",
+		JWTAudience:    "authenticated",
+		JWTIssuer:      supabaseURL + "/auth/v1",
+		AuthDebug:      getEnvOrDefault("AUTH_DEBUG", "") == "true",
 	}
 
 	// Create and start server

@@ -4,6 +4,31 @@ import (
 	"time"
 )
 
+// Profile represents a user profile for admin access
+type Profile struct {
+	ID        string    `json:"id"`
+	Email     string    `json:"email"`
+	IsAdmin   bool      `json:"is_admin"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Class represents a character class with skill trees
+type Class struct {
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	SkillSuffix string      `json:"skill_suffix"`
+	SkillTrees  []SkillTree `json:"skill_trees"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+}
+
+// SkillTree represents a skill tree within a character class
+type SkillTree struct {
+	Name   string   `json:"name"`
+	Skills []string `json:"skills"`
+}
+
 // Property represents a single item property/modifier
 type Property struct {
 	Code        string `json:"code"`
@@ -87,6 +112,9 @@ type ItemBase struct {
 	// Image URL for Supabase storage
 	ImageURL     string   `json:"image_url,omitempty"`
 	IconVariants []string `json:"icon_variants,omitempty"`
+
+	// Description for quest items
+	Description string `json:"description,omitempty"`
 
 	// Flags
 	Spawnable bool `json:"spawnable"`

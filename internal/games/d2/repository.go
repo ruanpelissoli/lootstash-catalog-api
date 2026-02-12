@@ -1054,3 +1054,244 @@ func (r *Repository) GetMaxIndexID(ctx context.Context, table string) (int, erro
 	err := r.pool.QueryRow(ctx, query).Scan(&maxID)
 	return maxID, err
 }
+
+// Profile operations
+
+// GetProfile retrieves a profile by ID
+func (r *Repository) GetProfile(ctx context.Context, id string) (*Profile, error) {
+	var p Profile
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, email, is_admin, created_at, updated_at
+		FROM d2.profiles WHERE id = $1`, id).Scan(
+		&p.ID, &p.Email, &p.IsAdmin, &p.CreatedAt, &p.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get profile failed: %w", err)
+	}
+	return &p, nil
+}
+
+// IsAdmin checks if a user is an admin
+func (r *Repository) IsAdmin(ctx context.Context, id string) (bool, error) {
+	var isAdmin bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT COALESCE(is_admin, false) FROM d2.profiles WHERE id = $1`, id).Scan(&isAdmin)
+	if err != nil {
+		return false, err
+	}
+	return isAdmin, nil
+}
+
+// Class operations
+
+// GetAllClasses retrieves all classes
+func (r *Repository) GetAllClasses(ctx context.Context) ([]Class, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, name, skill_suffix, skill_trees, created_at, updated_at
+		FROM d2.classes ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var classes []Class
+	for rows.Next() {
+		var c Class
+		var skillTreesJSON []byte
+		if err := rows.Scan(&c.ID, &c.Name, &c.SkillSuffix, &skillTreesJSON, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if len(skillTreesJSON) > 0 {
+			json.Unmarshal(skillTreesJSON, &c.SkillTrees)
+		}
+		classes = append(classes, c)
+	}
+	return classes, rows.Err()
+}
+
+// GetClass retrieves a class by ID
+func (r *Repository) GetClass(ctx context.Context, id string) (*Class, error) {
+	var c Class
+	var skillTreesJSON []byte
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, name, skill_suffix, skill_trees, created_at, updated_at
+		FROM d2.classes WHERE id = $1`, id).Scan(
+		&c.ID, &c.Name, &c.SkillSuffix, &skillTreesJSON, &c.CreatedAt, &c.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get class failed: %w", err)
+	}
+	if len(skillTreesJSON) > 0 {
+		json.Unmarshal(skillTreesJSON, &c.SkillTrees)
+	}
+	return &c, nil
+}
+
+// UpsertClass inserts or updates a class
+func (r *Repository) UpsertClass(ctx context.Context, c *Class) error {
+	skillTreesJSON, _ := json.Marshal(c.SkillTrees)
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO d2.classes (id, name, skill_suffix, skill_trees)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (id) DO UPDATE SET
+			name = EXCLUDED.name,
+			skill_suffix = EXCLUDED.skill_suffix,
+			skill_trees = EXCLUDED.skill_trees,
+			updated_at = NOW()`,
+		c.ID, c.Name, c.SkillSuffix, skillTreesJSON)
+	return err
+}
+
+// Quest item operations
+
+// GetAllQuestItems retrieves all quest items
+func (r *Repository) GetAllQuestItems(ctx context.Context) ([]ItemBase, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id FROM d2.item_bases WHERE quest_item = true ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []ItemBase
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		item, err := r.GetItemBase(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, *item)
+	}
+	return items, rows.Err()
+}
+
+// CreateQuestItem inserts a new quest item
+func (r *Repository) CreateQuestItem(ctx context.Context, ib *ItemBase) (int, error) {
+	var id int
+	err := r.pool.QueryRow(ctx, `
+		INSERT INTO d2.item_bases (code, name, item_type, category, quest_item, description, image_url)
+		VALUES ($1, $2, 'ques', 'misc', true, $3, $4)
+		RETURNING id`,
+		ib.Code, ib.Name, nullString(ib.Description), nullString(ib.ImageURL)).Scan(&id)
+	return id, err
+}
+
+// DeleteQuestItem deletes a quest item by ID (only if it is a quest item)
+func (r *Repository) DeleteQuestItem(ctx context.Context, id int) error {
+	result, err := r.pool.Exec(ctx, `
+		DELETE FROM d2.item_bases WHERE id = $1 AND quest_item = true`, id)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("quest item not found")
+	}
+	return nil
+}
+
+// Admin update operations
+
+// UpdateUniqueItemFields updates specific fields on a unique item
+func (r *Repository) UpdateUniqueItemFields(ctx context.Context, id int, item *UniqueItem) error {
+	propsJSON, _ := json.Marshal(item.Properties)
+	_, err := r.pool.Exec(ctx, `
+		UPDATE d2.unique_items SET
+			name = $2, base_code = $3, level_req = $4, ladder_only = $5,
+			properties = $6, image_url = COALESCE($7, image_url),
+			updated_at = NOW()
+		WHERE id = $1`,
+		id, item.Name, item.BaseCode, item.LevelReq, item.LadderOnly,
+		propsJSON, nullString(item.ImageURL))
+	return err
+}
+
+// UpdateSetItemFields updates specific fields on a set item
+func (r *Repository) UpdateSetItemFields(ctx context.Context, id int, item *SetItem) error {
+	propsJSON, _ := json.Marshal(item.Properties)
+	bonusJSON, _ := json.Marshal(item.BonusProperties)
+	_, err := r.pool.Exec(ctx, `
+		UPDATE d2.set_items SET
+			name = $2, set_name = $3, base_code = $4, level_req = $5,
+			properties = $6, bonus_properties = $7,
+			image_url = COALESCE($8, image_url),
+			updated_at = NOW()
+		WHERE id = $1`,
+		id, item.Name, item.SetName, item.BaseCode, item.LevelReq,
+		propsJSON, bonusJSON, nullString(item.ImageURL))
+	return err
+}
+
+// UpdateRunewordFields updates specific fields on a runeword
+func (r *Repository) UpdateRunewordFields(ctx context.Context, id int, item *Runeword) error {
+	validTypesJSON, _ := json.Marshal(item.ValidItemTypes)
+	runesJSON, _ := json.Marshal(item.Runes)
+	propsJSON, _ := json.Marshal(item.Properties)
+	_, err := r.pool.Exec(ctx, `
+		UPDATE d2.runewords SET
+			name = $2, display_name = $3, ladder_only = $4,
+			valid_item_types = $5, runes = $6, properties = $7,
+			image_url = COALESCE($8, image_url),
+			updated_at = NOW()
+		WHERE id = $1`,
+		id, item.Name, item.DisplayName, item.LadderOnly,
+		validTypesJSON, runesJSON, propsJSON, nullString(item.ImageURL))
+	return err
+}
+
+// UpdateRuneFields updates specific fields on a rune
+func (r *Repository) UpdateRuneFields(ctx context.Context, id int, item *Rune) error {
+	weaponJSON, _ := json.Marshal(item.WeaponMods)
+	helmJSON, _ := json.Marshal(item.HelmMods)
+	shieldJSON, _ := json.Marshal(item.ShieldMods)
+	_, err := r.pool.Exec(ctx, `
+		UPDATE d2.runes SET
+			code = $2, name = $3, rune_number = $4, level_req = $5,
+			weapon_mods = $6, helm_mods = $7, shield_mods = $8,
+			image_url = COALESCE($9, image_url),
+			updated_at = NOW()
+		WHERE id = $1`,
+		id, item.Code, item.Name, item.RuneNumber, item.LevelReq,
+		weaponJSON, helmJSON, shieldJSON, nullString(item.ImageURL))
+	return err
+}
+
+// UpdateGemFields updates specific fields on a gem
+func (r *Repository) UpdateGemFields(ctx context.Context, id int, item *Gem) error {
+	weaponJSON, _ := json.Marshal(item.WeaponMods)
+	helmJSON, _ := json.Marshal(item.HelmMods)
+	shieldJSON, _ := json.Marshal(item.ShieldMods)
+	_, err := r.pool.Exec(ctx, `
+		UPDATE d2.gems SET
+			code = $2, name = $3, gem_type = $4, quality = $5,
+			weapon_mods = $6, helm_mods = $7, shield_mods = $8,
+			image_url = COALESCE($9, image_url),
+			updated_at = NOW()
+		WHERE id = $1`,
+		id, item.Code, item.Name, item.GemType, item.Quality,
+		weaponJSON, helmJSON, shieldJSON, nullString(item.ImageURL))
+	return err
+}
+
+// UpdateItemBaseFields updates specific fields on a base item
+func (r *Repository) UpdateItemBaseFields(ctx context.Context, id int, item *ItemBase) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE d2.item_bases SET
+			code = $2, name = $3, category = $4, item_type = $5,
+			level_req = $6, str_req = $7, dex_req = $8,
+			min_ac = $9, max_ac = $10, min_dam = $11, max_dam = $12,
+			two_hand_min_dam = $13, two_hand_max_dam = $14,
+			max_sockets = $15, durability = $16, speed = $17,
+			description = $18, image_url = COALESCE($19, image_url),
+			updated_at = NOW()
+		WHERE id = $1`,
+		id, item.Code, item.Name, item.Category, item.ItemType,
+		item.LevelReq, item.StrReq, item.DexReq,
+		item.MinAC, item.MaxAC, item.MinDam, item.MaxDam,
+		item.TwoHandMinDam, item.TwoHandMaxDam,
+		item.MaxSockets, item.Durability, item.Speed,
+		nullString(item.Description), nullString(item.ImageURL))
+	return err
+}
