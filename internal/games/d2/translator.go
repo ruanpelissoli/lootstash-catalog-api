@@ -54,6 +54,7 @@ func NewPropertyTranslator() *PropertyTranslator {
 			"bar": "+{value} To Barbarian Skill Levels",
 			"dru": "+{value} To Druid Skill Levels",
 			"ass": "+{value} To Assassin Skill Levels",
+			"war": "+{value} To Warlock Skill Levels",
 
 			// Random class skill (Hellfire Torch, etc.)
 			"randclassskill": "+{value} To Random Character Class Skills",
@@ -277,6 +278,10 @@ func NewPropertyTranslator() *PropertyTranslator {
 			18: "Traps",
 			19: "Shadow Disciplines",
 			20: "Martial Arts",
+			// Warlock (tabs 21-23)
+			21: "Psychic Skills",
+			22: "Demonic Binding Skills",
+			23: "Arts of Chaos Skills",
 		},
 	}
 }
@@ -496,6 +501,9 @@ func (t *PropertyTranslator) GetDisplayName(code string) string {
 		"abs-fire%":    "Fire Absorb %",
 		"abs-cold%":    "Cold Absorb %",
 		"abs-ltng%":    "Lightning Absorb %",
+
+		// Class skills
+		"war": "Warlock Skills",
 	}
 
 	if name, ok := names[code]; ok {

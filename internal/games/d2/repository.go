@@ -960,3 +960,97 @@ func (r *Repository) GetItemTypesByCodes(ctx context.Context, codes []string) (m
 	}
 	return result, rows.Err()
 }
+
+// GetAllItemBaseNameToCode returns a mapping of base item names to codes (e.g., "Kris" -> "kri")
+func (r *Repository) GetAllItemBaseNameToCode(ctx context.Context) (map[string]string, error) {
+	rows, err := r.pool.Query(ctx, `SELECT name, code FROM d2.item_bases`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]string)
+	for rows.Next() {
+		var name, code string
+		if err := rows.Scan(&name, &code); err != nil {
+			return nil, err
+		}
+		result[name] = code
+	}
+	return result, rows.Err()
+}
+
+// GetRuneNameToCodeMap returns a mapping of rune names to codes (e.g., "Shael" -> "r13")
+func (r *Repository) GetRuneNameToCodeMap(ctx context.Context) (map[string]string, error) {
+	rows, err := r.pool.Query(ctx, `SELECT name, code FROM d2.runes`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]string)
+	for rows.Next() {
+		var name, code string
+		if err := rows.Scan(&name, &code); err != nil {
+			return nil, err
+		}
+		// Store both full name ("Shael Rune") and short name ("Shael")
+		result[name] = code
+		cleanName := name
+		if len(name) > 5 && name[len(name)-5:] == " Rune" {
+			cleanName = name[:len(name)-5]
+		}
+		result[cleanName] = code
+	}
+	return result, rows.Err()
+}
+
+// GetAllExistingNames returns all names from a table column as a set for deduplication
+func (r *Repository) GetAllExistingNames(ctx context.Context, table, column string) (map[string]bool, error) {
+	// table/column are internal constants, not user input
+	query := fmt.Sprintf("SELECT %s FROM d2.%s", column, table)
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]bool)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		result[NormalizeItemName(name)] = true
+	}
+	return result, rows.Err()
+}
+
+// GetNameToIndexID returns a map of normalized name -> index_id for a table
+func (r *Repository) GetNameToIndexID(ctx context.Context, table, nameColumn string) (map[string]int, error) {
+	query := fmt.Sprintf("SELECT %s, index_id FROM d2.%s", nameColumn, table)
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]int)
+	for rows.Next() {
+		var name string
+		var id int
+		if err := rows.Scan(&name, &id); err != nil {
+			return nil, err
+		}
+		result[NormalizeItemName(name)] = id
+	}
+	return result, rows.Err()
+}
+
+// GetMaxIndexID returns the maximum index_id from a table
+func (r *Repository) GetMaxIndexID(ctx context.Context, table string) (int, error) {
+	query := fmt.Sprintf("SELECT COALESCE(MAX(index_id), 0) FROM d2.%s", table)
+	var maxID int
+	err := r.pool.QueryRow(ctx, query).Scan(&maxID)
+	return maxID, err
+}

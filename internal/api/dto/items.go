@@ -32,6 +32,7 @@ var D2Classes = []AffixOption{
 	{Value: "barbarian", Label: "Barbarian"},
 	{Value: "druid", Label: "Druid"},
 	{Value: "assassin", Label: "Assassin"},
+	{Value: "warlock", Label: "Warlock"},
 }
 
 // ItemAffix represents a human-readable item affix/property

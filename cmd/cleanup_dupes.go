@@ -13,9 +13,10 @@ var cleanupDryRun bool
 
 var cleanupDupesCmd = &cobra.Command{
 	Use:   "cleanup-dupes",
-	Short: "Remove duplicate runes and gems from item_bases table",
-	Long: `Removes runes and gems from the item_bases table since they have
-their own dedicated tables (d2.runes and d2.gems).
+	Short: "Remove duplicate items from the database",
+	Long: `Removes duplicates from the database:
+- Runes and gems that appear in both item_bases and their dedicated tables
+- Unique items, set items, and base items with duplicate names (keeps lowest index_id)
 
 This prevents duplicate search results.
 
@@ -96,6 +97,91 @@ func runCleanupDupes(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("\nFound %d duplicate runes and %d duplicate gems\n", len(runeCodes), len(gemCodes))
 
+	// Find duplicate unique items (same name, different index_id — keep lowest)
+	PrintInfo("Finding duplicate unique items...")
+	dupeUniqueRows, err := pool.Query(ctx, `
+		SELECT u.index_id, u.name
+		FROM d2.unique_items u
+		WHERE u.index_id NOT IN (
+			SELECT MIN(index_id) FROM d2.unique_items GROUP BY LOWER(name)
+		)
+		ORDER BY u.name
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to query unique duplicates: %w", err)
+	}
+
+	type dupeItem struct {
+		id   int
+		name string
+	}
+	var dupeUniques []dupeItem
+	for dupeUniqueRows.Next() {
+		var d dupeItem
+		if err := dupeUniqueRows.Scan(&d.id, &d.name); err != nil {
+			dupeUniqueRows.Close()
+			return err
+		}
+		dupeUniques = append(dupeUniques, d)
+		fmt.Printf("  Found duplicate unique: %s (index_id: %d)\n", d.name, d.id)
+	}
+	dupeUniqueRows.Close()
+
+	// Find duplicate set items (same name, different index_id — keep lowest)
+	PrintInfo("Finding duplicate set items...")
+	dupeSetRows, err := pool.Query(ctx, `
+		SELECT s.index_id, s.name
+		FROM d2.set_items s
+		WHERE s.index_id NOT IN (
+			SELECT MIN(index_id) FROM d2.set_items GROUP BY LOWER(name)
+		)
+		ORDER BY s.name
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to query set item duplicates: %w", err)
+	}
+
+	var dupeSetItems []dupeItem
+	for dupeSetRows.Next() {
+		var d dupeItem
+		if err := dupeSetRows.Scan(&d.id, &d.name); err != nil {
+			dupeSetRows.Close()
+			return err
+		}
+		dupeSetItems = append(dupeSetItems, d)
+		fmt.Printf("  Found duplicate set item: %s (index_id: %d)\n", d.name, d.id)
+	}
+	dupeSetRows.Close()
+
+	// Find duplicate base items (same name, different id — keep lowest)
+	PrintInfo("Finding duplicate base items...")
+	dupeBaseRows, err := pool.Query(ctx, `
+		SELECT b.id, b.name
+		FROM d2.item_bases b
+		WHERE b.id NOT IN (
+			SELECT MIN(id) FROM d2.item_bases GROUP BY LOWER(name)
+		)
+		ORDER BY b.name
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to query base item duplicates: %w", err)
+	}
+
+	var dupeBases []dupeItem
+	for dupeBaseRows.Next() {
+		var d dupeItem
+		if err := dupeBaseRows.Scan(&d.id, &d.name); err != nil {
+			dupeBaseRows.Close()
+			return err
+		}
+		dupeBases = append(dupeBases, d)
+		fmt.Printf("  Found duplicate base: %s (id: %d)\n", d.name, d.id)
+	}
+	dupeBaseRows.Close()
+
+	fmt.Printf("\nDuplicates found: %d runes, %d gems, %d uniques, %d set items, %d bases\n",
+		len(runeCodes), len(gemCodes), len(dupeUniques), len(dupeSetItems), len(dupeBases))
+
 	if cleanupDryRun {
 		PrintInfo("Dry run - no changes made")
 		return nil
@@ -122,6 +208,39 @@ func runCleanupDupes(cmd *cobra.Command, args []string) error {
 			}
 		}
 		PrintSuccess(fmt.Sprintf("Deleted %d duplicate gems", len(gemCodes)))
+	}
+
+	if len(dupeUniques) > 0 {
+		PrintInfo("Deleting duplicate unique items...")
+		for _, d := range dupeUniques {
+			_, err := pool.Exec(ctx, `DELETE FROM d2.unique_items WHERE index_id = $1`, d.id)
+			if err != nil {
+				PrintError(fmt.Sprintf("Failed to delete unique %s (id %d): %v", d.name, d.id, err))
+			}
+		}
+		PrintSuccess(fmt.Sprintf("Deleted %d duplicate uniques", len(dupeUniques)))
+	}
+
+	if len(dupeSetItems) > 0 {
+		PrintInfo("Deleting duplicate set items...")
+		for _, d := range dupeSetItems {
+			_, err := pool.Exec(ctx, `DELETE FROM d2.set_items WHERE index_id = $1`, d.id)
+			if err != nil {
+				PrintError(fmt.Sprintf("Failed to delete set item %s (id %d): %v", d.name, d.id, err))
+			}
+		}
+		PrintSuccess(fmt.Sprintf("Deleted %d duplicate set items", len(dupeSetItems)))
+	}
+
+	if len(dupeBases) > 0 {
+		PrintInfo("Deleting duplicate base items...")
+		for _, d := range dupeBases {
+			_, err := pool.Exec(ctx, `DELETE FROM d2.item_bases WHERE id = $1`, d.id)
+			if err != nil {
+				PrintError(fmt.Sprintf("Failed to delete base %s (id %d): %v", d.name, d.id, err))
+			}
+		}
+		PrintSuccess(fmt.Sprintf("Deleted %d duplicate bases", len(dupeBases)))
 	}
 
 	PrintSuccess("Cleanup completed!")

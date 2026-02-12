@@ -126,6 +126,8 @@ func (r *Repository) SearchItems(ctx context.Context, query string, limit int) (
 				image_url
 			FROM d2.item_bases
 			WHERE spawnable = true AND tradable = true AND LOWER(name) LIKE $1
+				AND NOT EXISTS (SELECT 1 FROM d2.gems g WHERE g.code = item_bases.code)
+				AND NOT EXISTS (SELECT 1 FROM d2.runes r WHERE r.code = item_bases.code)
 		)
 		SELECT id, name, type, category, base_name, image_url
 		FROM all_items
@@ -765,6 +767,8 @@ func (r *Repository) CountSearchResults(ctx context.Context, query string) (int,
 			SELECT id FROM d2.gems WHERE LOWER(name) LIKE $1
 			UNION ALL
 			SELECT id FROM d2.item_bases WHERE spawnable = true AND tradable = true AND LOWER(name) LIKE $1
+				AND NOT EXISTS (SELECT 1 FROM d2.gems g WHERE g.code = item_bases.code)
+				AND NOT EXISTS (SELECT 1 FROM d2.runes r WHERE r.code = item_bases.code)
 		) AS all_items
 	`
 

@@ -13,11 +13,13 @@ import (
 
 var (
 	uploadDryRun    bool
+	uploadForce     bool
 	uploadCatalog   string
 	s3Endpoint      string
 	s3AccessKey     string
 	s3SecretKey     string
 	s3Region        string
+	s3PublicURL     string
 )
 
 var uploadIconsCmd = &cobra.Command{
@@ -47,13 +49,16 @@ func init() {
 	rootCmd.AddCommand(uploadIconsCmd)
 
 	uploadIconsCmd.Flags().BoolVar(&uploadDryRun, "dry-run", false, "Preview without making changes")
+	uploadIconsCmd.Flags().BoolVar(&uploadForce, "force", false, "Re-upload all icons (default: only items missing icons)")
 	uploadIconsCmd.Flags().StringVar(&uploadCatalog, "catalog", "catalogs/d2", "Path to catalog folder (contains icons/ and pages/ subfolders)")
 
-	// S3 configuration with local Supabase defaults
-	uploadIconsCmd.Flags().StringVar(&s3Endpoint, "s3-endpoint", "http://127.0.0.1:54321/storage/v1/s3", "S3 endpoint URL")
-	uploadIconsCmd.Flags().StringVar(&s3AccessKey, "s3-access-key", "625729a08b95bf1b7ff351a663f3a23c", "S3 access key")
-	uploadIconsCmd.Flags().StringVar(&s3SecretKey, "s3-secret-key", "850181e4652dd023b7a98c58ae0d2d34bd487ee0cc3254aed6eda37307425907", "S3 secret key")
-	uploadIconsCmd.Flags().StringVar(&s3Region, "s3-region", "local", "S3 region")
+	// S3 configuration - derives from SUPABASE_* env vars
+	supabaseDefault := getEnvOrDefault("SUPABASE_URL", "http://127.0.0.1:54321")
+	uploadIconsCmd.Flags().StringVar(&s3Endpoint, "s3-endpoint", supabaseDefault+"/storage/v1/s3", "S3 endpoint URL")
+	uploadIconsCmd.Flags().StringVar(&s3AccessKey, "s3-access-key", getEnvOrDefault("SUPABASE_S3_ACCESS_KEY", ""), "S3 access key")
+	uploadIconsCmd.Flags().StringVar(&s3SecretKey, "s3-secret-key", getEnvOrDefault("SUPABASE_S3_SECRET_KEY", ""), "S3 secret key")
+	uploadIconsCmd.Flags().StringVar(&s3Region, "s3-region", getEnvOrDefault("SUPABASE_S3_REGION", "local"), "S3 region")
+	uploadIconsCmd.Flags().StringVar(&s3PublicURL, "s3-public-url", supabaseDefault, "S3 public URL base for generating public image URLs")
 }
 
 func runUploadIcons(cmd *cobra.Command, args []string) error {
@@ -81,7 +86,7 @@ func runUploadIcons(cmd *cobra.Command, args []string) error {
 		s3SecretKey,
 		s3Region,
 		"d2-items",                    // bucket name
-		"http://127.0.0.1:54321",      // public URL base
+		s3PublicURL,                   // public URL base
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create S3 storage: %w", err)
@@ -90,7 +95,7 @@ func runUploadIcons(cmd *cobra.Command, args []string) error {
 
 	// Create uploader
 	repo := d2.NewRepository(db.Pool())
-	uploader := d2.NewIconUploader(repo, s3Storage, uploadDryRun)
+	uploader := d2.NewIconUploader(repo, s3Storage, uploadDryRun, uploadForce)
 
 	// Run upload
 	stats, err := uploader.Upload(ctx, uploadCatalog)

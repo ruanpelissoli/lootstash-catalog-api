@@ -33,6 +33,12 @@ var fallbackIconMappings = map[string]string{
 	"2hs": "2hsword_graphic.png",
 }
 
+// nameAliases maps normalized DB item names to normalized HTML item names
+// Used when the game data files use a different name than the HTML source
+var nameAliases = map[string]string{
+	"colossalsword": "colossussword",
+}
+
 // fallbackIconByName maps item names (normalized) to fallback icon filenames
 // Used for unique/set items that aren't found in HTML mapping
 var fallbackIconByName = map[string]string{
@@ -61,17 +67,19 @@ type IconUploader struct {
 	repo       *Repository
 	storage    storage.Storage
 	dryRun     bool
+	force      bool
 	iconsPath  string
 	pagesPath  string
 	imageCache map[string]string // imagePath -> uploadedURL
 }
 
 // NewIconUploader creates a new icon uploader
-func NewIconUploader(repo *Repository, stor storage.Storage, dryRun bool) *IconUploader {
+func NewIconUploader(repo *Repository, stor storage.Storage, dryRun bool, force bool) *IconUploader {
 	return &IconUploader{
 		repo:       repo,
 		storage:    stor,
 		dryRun:     dryRun,
+		force:      force,
 		imageCache: make(map[string]string),
 	}
 }
@@ -324,7 +332,11 @@ func (u *IconUploader) updateItemURL(ctx context.Context, item ItemWithoutImage,
 
 // Load functions for each item type
 func (u *IconUploader) loadAllUniques(ctx context.Context) ([]ItemWithoutImage, error) {
-	rows, err := u.repo.pool.Query(ctx, `SELECT id, name FROM d2.unique_items ORDER BY id`)
+	query := `SELECT id, name FROM d2.unique_items ORDER BY id`
+	if !u.force {
+		query = `SELECT id, name FROM d2.unique_items WHERE image_url IS NULL OR image_url = '' ORDER BY id`
+	}
+	rows, err := u.repo.pool.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +355,11 @@ func (u *IconUploader) loadAllUniques(ctx context.Context) ([]ItemWithoutImage, 
 }
 
 func (u *IconUploader) loadAllSets(ctx context.Context) ([]ItemWithoutImage, error) {
-	rows, err := u.repo.pool.Query(ctx, `SELECT id, name FROM d2.set_items ORDER BY id`)
+	query := `SELECT id, name FROM d2.set_items ORDER BY id`
+	if !u.force {
+		query = `SELECT id, name FROM d2.set_items WHERE image_url IS NULL OR image_url = '' ORDER BY id`
+	}
+	rows, err := u.repo.pool.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +378,11 @@ func (u *IconUploader) loadAllSets(ctx context.Context) ([]ItemWithoutImage, err
 }
 
 func (u *IconUploader) loadAllBases(ctx context.Context) ([]ItemWithoutImage, error) {
-	rows, err := u.repo.pool.Query(ctx, `SELECT code, name FROM d2.item_bases ORDER BY code`)
+	query := `SELECT code, name FROM d2.item_bases ORDER BY code`
+	if !u.force {
+		query = `SELECT code, name FROM d2.item_bases WHERE image_url IS NULL OR image_url = '' ORDER BY code`
+	}
+	rows, err := u.repo.pool.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +401,11 @@ func (u *IconUploader) loadAllBases(ctx context.Context) ([]ItemWithoutImage, er
 }
 
 func (u *IconUploader) loadAllRunes(ctx context.Context) ([]ItemWithoutImage, error) {
-	rows, err := u.repo.pool.Query(ctx, `SELECT id, code, name FROM d2.runes ORDER BY id`)
+	query := `SELECT id, code, name FROM d2.runes ORDER BY id`
+	if !u.force {
+		query = `SELECT id, code, name FROM d2.runes WHERE image_url IS NULL OR image_url = '' ORDER BY id`
+	}
+	rows, err := u.repo.pool.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +424,11 @@ func (u *IconUploader) loadAllRunes(ctx context.Context) ([]ItemWithoutImage, er
 }
 
 func (u *IconUploader) loadAllGems(ctx context.Context) ([]ItemWithoutImage, error) {
-	rows, err := u.repo.pool.Query(ctx, `SELECT id, code, name FROM d2.gems ORDER BY id`)
+	query := `SELECT id, code, name FROM d2.gems ORDER BY id`
+	if !u.force {
+		query = `SELECT id, code, name FROM d2.gems WHERE image_url IS NULL OR image_url = '' ORDER BY id`
+	}
+	rows, err := u.repo.pool.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -425,6 +453,13 @@ func (u *IconUploader) findInHTMLMapping(itemName string, htmlMapping map[string
 	key := normalizeForMatch(itemName)
 	if path, ok := htmlMapping[key]; ok {
 		return path, true
+	}
+
+	// Try name alias (DB name differs from HTML name)
+	if alias, ok := nameAliases[key]; ok {
+		if path, ok := htmlMapping[alias]; ok {
+			return path, true
+		}
 	}
 
 	// Try without "the" prefix

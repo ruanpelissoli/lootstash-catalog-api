@@ -40,6 +40,7 @@ func FilterableStats() []StatCodeInfo {
 		{Code: "bar", Name: "Barbarian Skills", Description: "+{value} To Barbarian Skill Levels", Category: "Skills", IsVariable: true},
 		{Code: "dru", Name: "Druid Skills", Description: "+{value} To Druid Skill Levels", Category: "Skills", IsVariable: true},
 		{Code: "ass", Name: "Assassin Skills", Description: "+{value} To Assassin Skill Levels", Category: "Skills", IsVariable: true},
+		{Code: "war", Name: "Warlock Skills", Description: "+{value} To Warlock Skill Levels", Category: "Skills", IsVariable: true},
 
 		// Skill Trees - Amazon
 		{Code: "ama-bow", Name: "Bow and Crossbow", Description: "+{value} To Bow and Crossbow Skills (Amazon Only)", Category: "Skill Trees", IsVariable: true},
@@ -75,6 +76,11 @@ func FilterableStats() []StatCodeInfo {
 		{Code: "ass-traps", Name: "Traps", Description: "+{value} To Traps (Assassin Only)", Category: "Skill Trees", IsVariable: true},
 		{Code: "ass-shadow", Name: "Shadow Disciplines", Description: "+{value} To Shadow Disciplines (Assassin Only)", Category: "Skill Trees", IsVariable: true},
 		{Code: "ass-martial", Name: "Martial Arts", Description: "+{value} To Martial Arts (Assassin Only)", Category: "Skill Trees", IsVariable: true},
+
+		// Skill Trees - Warlock
+		{Code: "war-psychic", Name: "Psychic Skills", Description: "+{value} To Psychic Skills (Warlock Only)", Category: "Skill Trees", IsVariable: true},
+		{Code: "war-demonic", Name: "Demonic Binding", Description: "+{value} To Demonic Binding Skills (Warlock Only)", Category: "Skill Trees", IsVariable: true},
+		{Code: "war-chaos", Name: "Arts of Chaos", Description: "+{value} To Arts of Chaos Skills (Warlock Only)", Category: "Skill Trees", IsVariable: true},
 
 		// Attributes
 		{Code: "str", Name: "Strength", Description: "+{value} To Strength", Category: "Attributes", IsVariable: true},

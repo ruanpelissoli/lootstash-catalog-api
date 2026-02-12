@@ -433,7 +433,7 @@ func seedStepUploadIcons(ctx context.Context, db *database.DB) error {
 
 	// Create uploader
 	repo := d2.NewRepository(db.Pool())
-	uploader := d2.NewIconUploader(repo, supabaseStorage, seedDryRun)
+	uploader := d2.NewIconUploader(repo, supabaseStorage, seedDryRun, true)
 
 	// Run upload
 	stats, err := uploader.Upload(ctx, seedCatalogPath)
