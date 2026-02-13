@@ -74,6 +74,33 @@ type HTMLParsedBaseItem struct {
 	InvHeight    int
 }
 
+// HTMLParsedRune represents a rune item extracted from misc.html
+type HTMLParsedRune struct {
+	Name       string
+	ImagePath  string
+	Level      int
+	RuneIndex  int
+	WeaponMods []string // raw property text
+	HelmMods   []string
+	ShieldMods []string
+}
+
+// HTMLParsedGem represents a gem item extracted from misc.html
+type HTMLParsedGem struct {
+	Name       string
+	ImagePath  string
+	WeaponMods []string
+	HelmMods   []string
+	ShieldMods []string
+}
+
+// HTMLParsedMiscItem represents a miscellaneous item extracted from misc.html
+type HTMLParsedMiscItem struct {
+	Name        string
+	ImagePath   string
+	Description string // e.g. "Terrorizes Act 2 when used"
+}
+
 // HTMLParsedRuneword represents a runeword extracted from HTML
 type HTMLParsedRuneword struct {
 	Name        string
@@ -175,6 +202,160 @@ func (p *HTMLItemParser) ParseRunewordsFile(filePath string) ([]HTMLParsedRunewo
 	})
 
 	return runewords, nil
+}
+
+// ParseMiscFile parses misc.html and returns runes, gems, and misc items
+func (p *HTMLItemParser) ParseMiscFile(filePath string) ([]HTMLParsedRune, []HTMLParsedGem, []HTMLParsedMiscItem, error) {
+	doc, err := p.openFile(filePath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	var runes []HTMLParsedRune
+	var gems []HTMLParsedGem
+	var miscItems []HTMLParsedMiscItem
+
+	doc.Find("article.element-item").Each(func(i int, s *goquery.Selection) {
+		// Read h4 text to determine item type
+		h4 := s.Find("h4").First()
+		if h4.Length() == 0 {
+			return
+		}
+		h4Text := strings.TrimSpace(h4.Text())
+
+		switch {
+		case strings.Contains(h4Text, "Rune"):
+			rn := p.parseRuneArticle(s, h4)
+			if rn.Name != "" {
+				runes = append(runes, rn)
+			}
+		case h4Text == "Gem":
+			gem := p.parseGemArticle(s)
+			if gem.Name != "" {
+				gems = append(gems, gem)
+			}
+		case h4Text == "Miscellaneous Item":
+			item := p.parseMiscArticle(s)
+			if item.Name != "" {
+				miscItems = append(miscItems, item)
+			}
+		// Skip: Quest Item, Potion, Consumable, Crafted Item, etc.
+		}
+	})
+
+	return runes, gems, miscItems, nil
+}
+
+// parseRuneArticle extracts rune data from an article element in misc.html
+func (p *HTMLItemParser) parseRuneArticle(s *goquery.Selection, h4 *goquery.Selection) HTMLParsedRune {
+	var rn HTMLParsedRune
+
+	rn.Name = p.extractName(s)
+	if rn.Name == "" {
+		return rn
+	}
+
+	rn.ImagePath = p.extractImagePath(s)
+	rn.Level = p.extractSpanInt(h4, "zso_runelevel")
+	rn.RuneIndex = p.extractSpanInt(h4, "zso_runeindex")
+
+	rn.WeaponMods, rn.HelmMods, rn.ShieldMods = p.parseMiscModSections(s)
+
+	return rn
+}
+
+// parseGemArticle extracts gem data from an article element in misc.html
+func (p *HTMLItemParser) parseGemArticle(s *goquery.Selection) HTMLParsedGem {
+	var gem HTMLParsedGem
+
+	gem.Name = p.extractName(s)
+	if gem.Name == "" {
+		return gem
+	}
+
+	gem.ImagePath = p.extractImagePath(s)
+	gem.WeaponMods, gem.HelmMods, gem.ShieldMods = p.parseMiscModSections(s)
+
+	return gem
+}
+
+// parseMiscArticle extracts miscellaneous item data from an article element in misc.html
+func (p *HTMLItemParser) parseMiscArticle(s *goquery.Selection) HTMLParsedMiscItem {
+	var item HTMLParsedMiscItem
+
+	item.Name = p.extractName(s)
+	if item.Name == "" {
+		return item
+	}
+
+	item.ImagePath = p.extractImagePath(s)
+
+	// Extract description from the p.z-smallstats content (cleaned)
+	firstStats := s.Find("p.z-smallstats").First()
+	if firstStats.Length() > 0 {
+		lines := p.extractPropertiesFromStats(firstStats)
+		if len(lines) > 0 {
+			item.Description = strings.Join(lines, "; ")
+		}
+	}
+
+	return item
+}
+
+// parseMiscModSections extracts weapon/helm(armor)/shield mod text from the rune/gem mods div.
+// The div contains a z-hr child and sections headed by z-white spans ("Weapons", "Armor", "Shields").
+func (p *HTMLItemParser) parseMiscModSections(s *goquery.Selection) (weapon, helm, shield []string) {
+	// Find the div.z-vf-hide that contains a div.z-hr child (the rune/gem mods div)
+	var modsDiv *goquery.Selection
+	s.Find("div.z-vf-hide").Each(func(i int, div *goquery.Selection) {
+		if modsDiv != nil {
+			return
+		}
+		if div.Find("div.z-hr").Length() > 0 {
+			modsDiv = div
+		}
+	})
+	if modsDiv == nil {
+		return
+	}
+
+	// Determine current section by iterating children
+	currentSection := ""
+	modsDiv.Children().Each(func(i int, child *goquery.Selection) {
+		nodeName := goquery.NodeName(child)
+
+		// Check for section headers (span.z-white containing "Weapons", "Armor", "Shields")
+		if nodeName == "span" && child.HasClass("z-white") {
+			headerText := strings.TrimSpace(child.Text())
+			switch {
+			case strings.Contains(headerText, "Weapons"):
+				currentSection = "weapon"
+			case strings.Contains(headerText, "Armor"):
+				currentSection = "helm"
+			case strings.Contains(headerText, "Shields"):
+				currentSection = "shield"
+			}
+			return
+		}
+
+		// Collect mod text from span.z-smallstats
+		if nodeName == "span" && child.HasClass("z-smallstats") {
+			text := strings.TrimSpace(child.Text())
+			if text == "" {
+				return
+			}
+			switch currentSection {
+			case "weapon":
+				weapon = append(weapon, text)
+			case "helm":
+				helm = append(helm, text)
+			case "shield":
+				shield = append(shield, text)
+			}
+		}
+	})
+
+	return
 }
 
 func (p *HTMLItemParser) openFile(filePath string) (*goquery.Document, error) {

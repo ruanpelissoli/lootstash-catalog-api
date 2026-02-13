@@ -1026,6 +1026,26 @@ func (r *Repository) GetAllExistingNames(ctx context.Context, table, column stri
 	return result, rows.Err()
 }
 
+// GetNamesWithImages returns normalized names that have a non-empty image_url
+func (r *Repository) GetNamesWithImages(ctx context.Context, table, nameColumn string) (map[string]bool, error) {
+	query := fmt.Sprintf("SELECT %s FROM d2.%s WHERE image_url IS NOT NULL AND image_url != ''", nameColumn, table)
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]bool)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		result[NormalizeItemName(name)] = true
+	}
+	return result, rows.Err()
+}
+
 // GetNameToIndexID returns a map of normalized name -> index_id for a table
 func (r *Repository) GetNameToIndexID(ctx context.Context, table, nameColumn string) (map[string]int, error) {
 	query := fmt.Sprintf("SELECT %s, index_id FROM d2.%s", nameColumn, table)

@@ -151,6 +151,7 @@ func NewPropertyTranslator() *PropertyTranslator {
 			"pierce-cold":    "-{value}% To Enemy Cold Resistance",
 			"pierce-ltng":    "-{value}% To Enemy Lightning Resistance",
 			"pierce-pois":    "-{value}% To Enemy Poison Resistance",
+			"pierce-mag":     "-{value}% To Enemy Magic Resistance",
 
 			// Sunder Charms (D2R Patch 2.5)
 			"pierce-immunity-cold":   "Monster Cold Immunity is Sundered",
@@ -410,103 +411,23 @@ func (t *PropertyTranslator) HasRange(prop Property) bool {
 }
 
 // GetDisplayName returns a formatted property name for filtering UI
-func (t *PropertyTranslator) GetDisplayName(code string) string {
-	// Map codes to simple display names for filter dropdowns
-	names := map[string]string{
-		// Stats
-		"allskills":    "All Skills",
-		"str":          "Strength",
-		"dex":          "Dexterity",
-		"vit":          "Vitality",
-		"enr":          "Energy",
-		"hp":           "Life",
-		"mana":         "Mana",
-		"all-stats":    "All Attributes",
+// displayNameCache is built once from FilterableStats to avoid maintaining
+// two separate name mappings. Both item affixes and stat filters use the
+// same names from FilterableStats().
+var displayNameCache map[string]string
 
-		// Resistances
-		"res-fire":     "Fire Resistance",
-		"res-cold":     "Cold Resistance",
-		"res-ltng":     "Lightning Resistance",
-		"res-pois":     "Poison Resistance",
-		"res-all":      "All Resistances",
-		"res-mag":      "Magic Resistance",
-
-		// Damage
-		"dmg%":         "Enhanced Damage",
-		"dmg":          "Damage",
-		"dmg-min":      "Minimum Damage",
-		"dmg-max":      "Maximum Damage",
-		"ltng-min":     "Minimum Lightning Damage",
-		"ltng-max":     "Maximum Lightning Damage",
-		"fire-min":     "Minimum Fire Damage",
-		"fire-max":     "Maximum Fire Damage",
-		"cold-min":     "Minimum Cold Damage",
-		"cold-max":     "Maximum Cold Damage",
-
-		// Defense
-		"ac%":          "Enhanced Defense",
-		"ac":           "Defense",
-		"red-dmg":      "Damage Reduced",
-		"red-dmg%":     "Damage Reduced %",
-		"red-mag":      "Magic Damage Reduced",
-
-		// Speed
-		"cast1":        "Faster Cast Rate",
-		"cast2":        "Faster Cast Rate",
-		"cast3":        "Faster Cast Rate",
-		"swing1":       "Increased Attack Speed",
-		"swing2":       "Increased Attack Speed",
-		"swing3":       "Increased Attack Speed",
-		"move1":        "Faster Run/Walk",
-		"move2":        "Faster Run/Walk",
-		"move3":        "Faster Run/Walk",
-		"balance1":     "Faster Hit Recovery",
-		"balance2":     "Faster Hit Recovery",
-		"balance3":     "Faster Hit Recovery",
-		"block1":       "Faster Block Rate",
-		"block2":       "Faster Block Rate",
-		"block3":       "Faster Block Rate",
-
-		// MF/GF
-		"mag%":         "Magic Find",
-		"gold%":        "Extra Gold",
-
-		// Leech
-		"lifesteal":    "Life Steal",
-		"manasteal":    "Mana Steal",
-
-		// Physical bonuses
-		"crush":        "Crushing Blow",
-		"deadly":       "Deadly Strike",
-		"openwounds":   "Open Wounds",
-
-		// Pierce
-		"pierce-fire":  "Fire Pierce",
-		"pierce-cold":  "Cold Pierce",
-		"pierce-ltng":  "Lightning Pierce",
-		"pierce-pois":  "Poison Pierce",
-
-		// Sunder charms
-		"pierce-immunity-cold":   "Sundered Cold Immunity",
-		"pierce-immunity-fire":   "Sundered Fire Immunity",
-		"pierce-immunity-light":  "Sundered Lightning Immunity",
-		"pierce-immunity-poison": "Sundered Poison Immunity",
-		"pierce-immunity-damage": "Sundered Physical Immunity",
-		"pierce-immunity-magic":  "Sundered Magic Immunity",
-
-		// Absorb
-		"abs-fire":     "Fire Absorb",
-		"abs-cold":     "Cold Absorb",
-		"abs-ltng":     "Lightning Absorb",
-		"abs-fire%":    "Fire Absorb %",
-		"abs-cold%":    "Cold Absorb %",
-		"abs-ltng%":    "Lightning Absorb %",
-
-		// Class skills
-		"war": "Warlock Skills",
+func init() {
+	displayNameCache = make(map[string]string)
+	for _, stat := range FilterableStats() {
+		displayNameCache[stat.Code] = stat.Name
+		for _, alias := range stat.Aliases {
+			displayNameCache[alias] = stat.Name
+		}
 	}
+}
 
-	if name, ok := names[code]; ok {
+func (t *PropertyTranslator) GetDisplayName(code string) string {
+	if name, ok := displayNameCache[code]; ok {
 		return name
 	}
 	return code

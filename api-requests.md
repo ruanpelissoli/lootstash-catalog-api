@@ -1217,6 +1217,7 @@ Represents a single item property/affix.
 ```typescript
 interface ItemAffix {
   name: string;        // Human-readable text: "+2 To All Skills"
+  displayName: string; // Short name for UI filter labels: "All Skills"
   description?: string;
   code: string;        // Internal code for filtering
   hasRange: boolean;   // true if min != max
@@ -1492,6 +1493,7 @@ curl "http://localhost:8080/api/v1/d2/stats"
 Stats are grouped into these categories for UI organization:
 
 - **Skills** - Skill bonuses (+All Skills, +Class Skills)
+- **Skill Trees** - Specific skill tree bonuses (e.g., +Bow and Crossbow Skills)
 - **Attributes** - Strength, Dexterity, Vitality, Energy
 - **Life & Mana** - Life, Mana, regeneration
 - **Speed** - FCR, IAS, FRW, FHR
@@ -1504,6 +1506,8 @@ Stats are grouped into these categories for UI organization:
 - **Combat** - Crushing blow, deadly strike, open wounds
 - **Magic Find** - MF, GF
 - **Pierce** - Enemy resistance reduction
+- **Per Level** - Stats that scale per character level (e.g., +Life Per Level)
+- **Sunder** - Sunder charms that break immunities
 - **Other** - Sockets, cannot be frozen, ethereal, etc.
 
 ### Aliases

@@ -22,10 +22,17 @@ type HTMLImportStats struct {
 	SetItemsSkipped  int
 	RunewordsImported int
 	RunewordsSkipped  int
+	RunesImported    int
+	RunesSkipped     int
+	GemsImported     int
+	GemsSkipped      int
+	MiscImported     int
+	MiscSkipped      int
 	ImagesUploaded   int
 	RawProperties    int
 	Errors           int
 	ErrorMessages    []string
+	MissingStatCodes []string
 }
 
 // htmlTypeNameToCode maps HTML type display names to D2 item type codes
@@ -114,12 +121,18 @@ type HTMLImporter struct {
 	existingSetItems  map[string]bool
 	existingSets      map[string]bool
 	existingRunewords map[string]bool
+	existingRunes     map[string]bool
+	existingGems      map[string]bool
+	existingImageURLs map[string]string // normalized name -> image_url (for items that already have images)
 	imageCache        map[string]string // imagePath -> uploaded URL
 
 	// Name -> index_id maps for force mode (reuse existing IDs)
 	uniqueNameToID   map[string]int
 	setItemNameToID  map[string]int
 	setBonusNameToID map[string]int
+
+	// Track all property codes seen during import for validation
+	seenCodes map[string]bool
 }
 
 // NewHTMLImporter creates a new HTML importer
@@ -133,6 +146,7 @@ func NewHTMLImporter(repo *Repository, stor storage.Storage, dryRun bool, force 
 		dryRun:            dryRun,
 		force:             force,
 		imageCache:        make(map[string]string),
+		seenCodes:         make(map[string]bool),
 	}
 }
 
@@ -149,8 +163,9 @@ func (h *HTMLImporter) ImportFromHTML(ctx context.Context, catalogPath, itemType
 		return nil, fmt.Errorf("failed to load caches: %w", err)
 	}
 	fmt.Printf("    Base names: %d, Rune names: %d\n", len(h.baseNameToCode), len(h.runeNameToCode))
-	fmt.Printf("    Existing bases: %d, uniques: %d, sets: %d, set items: %d, runewords: %d\n",
-		len(h.existingBases), len(h.existingUniques), len(h.existingSets), len(h.existingSetItems), len(h.existingRunewords))
+	fmt.Printf("    Existing bases: %d, uniques: %d, sets: %d, set items: %d, runewords: %d, runes: %d, gems: %d\n",
+		len(h.existingBases), len(h.existingUniques), len(h.existingSets), len(h.existingSetItems), len(h.existingRunewords),
+		len(h.existingRunes), len(h.existingGems))
 
 	// Import by type
 	switch itemType {
@@ -170,6 +185,18 @@ func (h *HTMLImporter) ImportFromHTML(ctx context.Context, catalogPath, itemType
 		if err := h.importRunewords(ctx, pagesPath, stats); err != nil {
 			return stats, err
 		}
+	case "runes":
+		if err := h.importMiscRunes(ctx, pagesPath, stats); err != nil {
+			return stats, err
+		}
+	case "gems":
+		if err := h.importMiscGems(ctx, pagesPath, stats); err != nil {
+			return stats, err
+		}
+	case "misc":
+		if err := h.importMisc(ctx, pagesPath, stats); err != nil {
+			return stats, err
+		}
 	case "all":
 		// Import bases first so unique/set items can resolve base codes
 		if err := h.importBases(ctx, pagesPath, stats); err != nil {
@@ -186,11 +213,30 @@ func (h *HTMLImporter) ImportFromHTML(ctx context.Context, catalogPath, itemType
 		if err := h.importRunewords(ctx, pagesPath, stats); err != nil {
 			return stats, err
 		}
+		if err := h.importMisc(ctx, pagesPath, stats); err != nil {
+			return stats, err
+		}
 	default:
-		return nil, fmt.Errorf("unknown item type: %s (use: bases, uniques, sets, runewords, all)", itemType)
+		return nil, fmt.Errorf("unknown item type: %s (use: bases, uniques, sets, runewords, runes, gems, misc, all)", itemType)
 	}
 
+	// Validate seen property codes against FilterableStats registry
+	allCodes := make([]string, 0, len(h.seenCodes))
+	for code := range h.seenCodes {
+		allCodes = append(allCodes, code)
+	}
+	stats.MissingStatCodes = ValidateStatCodes(allCodes)
+
 	return stats, nil
+}
+
+// collectPropertyCodes records all property codes from a slice into seenCodes
+func (h *HTMLImporter) collectPropertyCodes(props []Property) {
+	for _, p := range props {
+		if p.Code != "" {
+			h.seenCodes[p.Code] = true
+		}
+	}
 }
 
 // loadCaches loads lookup data from the database
@@ -230,6 +276,35 @@ func (h *HTMLImporter) loadCaches(ctx context.Context) error {
 	h.existingRunewords, err = h.repo.GetAllExistingNames(ctx, "runewords", "display_name")
 	if err != nil {
 		return fmt.Errorf("existing runewords: %w", err)
+	}
+
+	h.existingRunes, err = h.repo.GetAllExistingNames(ctx, "runes", "name")
+	if err != nil {
+		return fmt.Errorf("existing runes: %w", err)
+	}
+
+	h.existingGems, err = h.repo.GetAllExistingNames(ctx, "gems", "name")
+	if err != nil {
+		return fmt.Errorf("existing gems: %w", err)
+	}
+
+	// Load names that already have images (to skip unnecessary uploads)
+	h.existingImageURLs = make(map[string]string)
+	for _, tbl := range []struct{ table, col string }{
+		{"item_bases", "name"},
+		{"unique_items", "name"},
+		{"set_items", "name"},
+		{"runewords", "display_name"},
+		{"runes", "name"},
+		{"gems", "name"},
+	} {
+		names, err := h.repo.GetNamesWithImages(ctx, tbl.table, tbl.col)
+		if err != nil {
+			return fmt.Errorf("images for %s: %w", tbl.table, err)
+		}
+		for name := range names {
+			h.existingImageURLs[name] = tbl.table
+		}
 	}
 
 	// Load name -> index_id maps for force mode
@@ -492,6 +567,8 @@ func (h *HTMLImporter) importUniques(ctx context.Context, pagesPath string, stat
 			}
 		}
 
+		h.collectPropertyCodes(properties)
+
 		// Upload image
 		imageURL := h.uploadItemImage(ctx, item.ImagePath, "d2/unique", item.Name, stats)
 
@@ -651,6 +728,9 @@ func (h *HTMLImporter) importSets(ctx context.Context, pagesPath string, stats *
 		}
 		bonusProperties = combineAllAttributes(bonusProperties, h.translator)
 
+		h.collectPropertyCodes(properties)
+		h.collectPropertyCodes(bonusProperties)
+
 		// Upload image
 		imageURL := h.uploadItemImage(ctx, item.ImagePath, "d2/set", item.Name, stats)
 
@@ -748,6 +828,8 @@ func (h *HTMLImporter) importRunewords(ctx context.Context, pagesPath string, st
 			}
 		}
 
+		h.collectPropertyCodes(properties)
+
 		// Generate an internal name for the runeword (like "Runeword123")
 		internalName := fmt.Sprintf("HTMLRuneword_%s", strings.ReplaceAll(rw.Name, " ", ""))
 
@@ -778,9 +860,310 @@ func (h *HTMLImporter) importRunewords(ctx context.Context, pagesPath string, st
 	return nil
 }
 
-// uploadItemImage handles image upload for an item
+// importMisc imports runes, gems, and misc items from misc.html
+func (h *HTMLImporter) importMisc(ctx context.Context, pagesPath string, stats *HTMLImportStats) error {
+	miscPath := filepath.Join(pagesPath, "misc.html")
+	if _, err := os.Stat(miscPath); os.IsNotExist(err) {
+		fmt.Println("\n  No misc.html found, skipping misc import")
+		return nil
+	}
+
+	fmt.Println("\n  Parsing misc.html...")
+	runes, gems, miscItems, err := h.parser.ParseMiscFile(miscPath)
+	if err != nil {
+		return fmt.Errorf("failed to parse misc.html: %w", err)
+	}
+	fmt.Printf("    Found %d runes, %d gems, %d misc items in HTML\n", len(runes), len(gems), len(miscItems))
+
+	if err := h.importRuneItems(ctx, runes, stats); err != nil {
+		return err
+	}
+	if err := h.importGemItems(ctx, gems, stats); err != nil {
+		return err
+	}
+	if err := h.importMiscItems(ctx, miscItems, stats); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// importMiscRunes imports only runes from misc.html
+func (h *HTMLImporter) importMiscRunes(ctx context.Context, pagesPath string, stats *HTMLImportStats) error {
+	miscPath := filepath.Join(pagesPath, "misc.html")
+	if _, err := os.Stat(miscPath); os.IsNotExist(err) {
+		fmt.Println("\n  No misc.html found, skipping rune import")
+		return nil
+	}
+
+	fmt.Println("\n  Parsing misc.html for runes...")
+	runes, _, _, err := h.parser.ParseMiscFile(miscPath)
+	if err != nil {
+		return fmt.Errorf("failed to parse misc.html: %w", err)
+	}
+	fmt.Printf("    Found %d runes in HTML\n", len(runes))
+
+	return h.importRuneItems(ctx, runes, stats)
+}
+
+// importMiscGems imports only gems from misc.html
+func (h *HTMLImporter) importMiscGems(ctx context.Context, pagesPath string, stats *HTMLImportStats) error {
+	miscPath := filepath.Join(pagesPath, "misc.html")
+	if _, err := os.Stat(miscPath); os.IsNotExist(err) {
+		fmt.Println("\n  No misc.html found, skipping gem import")
+		return nil
+	}
+
+	fmt.Println("\n  Parsing misc.html for gems...")
+	_, gems, _, err := h.parser.ParseMiscFile(miscPath)
+	if err != nil {
+		return fmt.Errorf("failed to parse misc.html: %w", err)
+	}
+	fmt.Printf("    Found %d gems in HTML\n", len(gems))
+
+	return h.importGemItems(ctx, gems, stats)
+}
+
+// importRuneItems imports rune items parsed from misc.html
+func (h *HTMLImporter) importRuneItems(ctx context.Context, runes []HTMLParsedRune, stats *HTMLImportStats) error {
+	for _, rn := range runes {
+		normalized := NormalizeItemName(rn.Name)
+
+		if h.existingRunes[normalized] && !h.force {
+			stats.RunesSkipped++
+			continue
+		}
+
+		// Look up existing code from runeNameToCode map, or generate from index
+		code := ""
+		if c, ok := h.runeNameToCode[rn.Name]; ok {
+			code = c
+		} else {
+			// Generate code like "r27" from rune index
+			code = fmt.Sprintf("r%02d", rn.RuneIndex)
+		}
+
+		// Reverse-translate weapon/helm/shield mod text -> []Property
+		weaponMods := h.reverseTranslator.ReverseTranslateLines(rn.WeaponMods)
+		for i := range weaponMods {
+			if weaponMods[i].Code == "raw" {
+				stats.RawProperties++
+			} else {
+				h.translator.EnrichProperty(&weaponMods[i])
+			}
+		}
+
+		helmMods := h.reverseTranslator.ReverseTranslateLines(rn.HelmMods)
+		for i := range helmMods {
+			if helmMods[i].Code == "raw" {
+				stats.RawProperties++
+			} else {
+				h.translator.EnrichProperty(&helmMods[i])
+			}
+		}
+
+		shieldMods := h.reverseTranslator.ReverseTranslateLines(rn.ShieldMods)
+		for i := range shieldMods {
+			if shieldMods[i].Code == "raw" {
+				stats.RawProperties++
+			} else {
+				h.translator.EnrichProperty(&shieldMods[i])
+			}
+		}
+
+		h.collectPropertyCodes(weaponMods)
+		h.collectPropertyCodes(helmMods)
+		h.collectPropertyCodes(shieldMods)
+
+		// Upload image
+		imageURL := h.uploadItemImage(ctx, rn.ImagePath, "d2/rune", rn.Name, stats)
+
+		runeItem := &Rune{
+			Code:       code,
+			Name:       rn.Name,
+			RuneNumber: rn.RuneIndex,
+			Level:      rn.Level,
+			LevelReq:   rn.Level,
+			WeaponMods: weaponMods,
+			HelmMods:   helmMods,
+			ShieldMods: shieldMods,
+			ImageURL:   imageURL,
+		}
+
+		if !h.dryRun {
+			if err := h.repo.UpsertRune(ctx, runeItem); err != nil {
+				stats.Errors++
+				stats.ErrorMessages = append(stats.ErrorMessages, fmt.Sprintf("rune %s: %v", rn.Name, err))
+				continue
+			}
+		} else {
+			fmt.Printf("    [DRY-RUN] Would import rune: %s (code: %s, index: %d, level: %d, weapon: %d, helm: %d, shield: %d)\n",
+				rn.Name, code, rn.RuneIndex, rn.Level, len(weaponMods), len(helmMods), len(shieldMods))
+		}
+
+		stats.RunesImported++
+		h.existingRunes[normalized] = true
+	}
+
+	fmt.Printf("    Runes: %d imported, %d skipped\n", stats.RunesImported, stats.RunesSkipped)
+	return nil
+}
+
+// importGemItems imports gem items parsed from misc.html
+func (h *HTMLImporter) importGemItems(ctx context.Context, gems []HTMLParsedGem, stats *HTMLImportStats) error {
+	for _, gem := range gems {
+		normalized := NormalizeItemName(gem.Name)
+
+		if h.existingGems[normalized] && !h.force {
+			stats.GemsSkipped++
+			continue
+		}
+
+		// Use parseGemNameParts to get gemType/quality
+		gemType, quality := parseGemNameParts(gem.Name)
+
+		// Generate code from name
+		code := generateBaseCode(gem.Name)
+
+		// Reverse-translate weapon/helm/shield mod text -> []Property
+		weaponMods := h.reverseTranslator.ReverseTranslateLines(gem.WeaponMods)
+		for i := range weaponMods {
+			if weaponMods[i].Code == "raw" {
+				stats.RawProperties++
+			} else {
+				h.translator.EnrichProperty(&weaponMods[i])
+			}
+		}
+
+		helmMods := h.reverseTranslator.ReverseTranslateLines(gem.HelmMods)
+		for i := range helmMods {
+			if helmMods[i].Code == "raw" {
+				stats.RawProperties++
+			} else {
+				h.translator.EnrichProperty(&helmMods[i])
+			}
+		}
+
+		shieldMods := h.reverseTranslator.ReverseTranslateLines(gem.ShieldMods)
+		for i := range shieldMods {
+			if shieldMods[i].Code == "raw" {
+				stats.RawProperties++
+			} else {
+				h.translator.EnrichProperty(&shieldMods[i])
+			}
+		}
+
+		h.collectPropertyCodes(weaponMods)
+		h.collectPropertyCodes(helmMods)
+		h.collectPropertyCodes(shieldMods)
+
+		// Upload image
+		imageURL := h.uploadItemImage(ctx, gem.ImagePath, "d2/gem", gem.Name, stats)
+
+		gemItem := &Gem{
+			Code:       code,
+			Name:       gem.Name,
+			GemType:    gemType,
+			Quality:    quality,
+			WeaponMods: weaponMods,
+			HelmMods:   helmMods,
+			ShieldMods: shieldMods,
+			ImageURL:   imageURL,
+		}
+
+		if !h.dryRun {
+			if err := h.repo.UpsertGem(ctx, gemItem); err != nil {
+				stats.Errors++
+				stats.ErrorMessages = append(stats.ErrorMessages, fmt.Sprintf("gem %s: %v", gem.Name, err))
+				continue
+			}
+		} else {
+			fmt.Printf("    [DRY-RUN] Would import gem: %s (code: %s, type: %s, quality: %s, weapon: %d, helm: %d, shield: %d)\n",
+				gem.Name, code, gemType, quality, len(weaponMods), len(helmMods), len(shieldMods))
+		}
+
+		stats.GemsImported++
+		h.existingGems[normalized] = true
+	}
+
+	fmt.Printf("    Gems: %d imported, %d skipped\n", stats.GemsImported, stats.GemsSkipped)
+	return nil
+}
+
+// importMiscItems imports miscellaneous items (worldstone shards, essences, keys, etc.) as item_bases
+func (h *HTMLImporter) importMiscItems(ctx context.Context, miscItems []HTMLParsedMiscItem, stats *HTMLImportStats) error {
+	// Track codes we generate to avoid collisions within this import
+	usedCodes := make(map[string]bool)
+	for code := range h.baseNameToCode {
+		usedCodes[code] = true
+	}
+
+	for _, item := range miscItems {
+		normalized := NormalizeItemName(item.Name)
+
+		if h.existingBases[normalized] && !h.force {
+			stats.MiscSkipped++
+			continue
+		}
+
+		// Generate code
+		code := generateBaseCode(item.Name)
+		if usedCodes[code] {
+			for i := 2; ; i++ {
+				candidate := fmt.Sprintf("%s%d", code, i)
+				if len(candidate) > 10 {
+					candidate = fmt.Sprintf("%s%d", code[:10-len(fmt.Sprintf("%d", i))], i)
+				}
+				if !usedCodes[candidate] {
+					code = candidate
+					break
+				}
+			}
+		}
+		usedCodes[code] = true
+
+		// Upload image
+		imageURL := h.uploadItemImage(ctx, item.ImagePath, "d2/misc", item.Name, stats)
+
+		base := &ItemBase{
+			Code:        code,
+			Name:        item.Name,
+			Category:    "misc",
+			Spawnable:   true,
+			Rarity:      1,
+			Description: item.Description,
+			ImageURL:    imageURL,
+		}
+
+		if !h.dryRun {
+			if err := h.repo.UpsertItemBase(ctx, base); err != nil {
+				stats.Errors++
+				stats.ErrorMessages = append(stats.ErrorMessages, fmt.Sprintf("misc %s: %v", item.Name, err))
+				continue
+			}
+		} else {
+			fmt.Printf("    [DRY-RUN] Would import misc: %s (code: %s, desc: %s)\n",
+				item.Name, code, item.Description)
+		}
+
+		stats.MiscImported++
+		h.existingBases[normalized] = true
+	}
+
+	fmt.Printf("    Misc items: %d imported, %d skipped\n", stats.MiscImported, stats.MiscSkipped)
+	return nil
+}
+
+// uploadItemImage handles image upload for an item.
+// Skips upload if the item already has an image in the database.
 func (h *HTMLImporter) uploadItemImage(ctx context.Context, imagePath, category, itemName string, stats *HTMLImportStats) string {
 	if imagePath == "" || h.storage == nil {
+		return ""
+	}
+
+	// Skip if item already has an image in the database
+	normalized := NormalizeItemName(itemName)
+	if _, hasImage := h.existingImageURLs[normalized]; hasImage {
 		return ""
 	}
 

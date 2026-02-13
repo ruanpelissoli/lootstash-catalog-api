@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -16,14 +17,14 @@ import (
 var (
 	seedDryRun             bool
 	seedSkipImport         bool
+	seedSkipHTMLImport     bool
 	seedSkipCleanup        bool
 	seedSkipNames          bool
 	seedSkipIcons          bool
 	seedSkipRunewordIcons  bool
 	seedSkipVerify         bool
-	seedSupabaseURL        string
-	seedSupabaseServiceKey string
 	seedCatalogPath        string
+	seedMissingStatCodes   []string // accumulated from TSV + HTML imports
 )
 
 var seedCmd = &cobra.Command{
@@ -37,11 +38,12 @@ Migrations are managed in supabase/migrations/ - each game has its own schema (d
 
 Steps performed (in order):
   1. Import         - Import catalog data from datatables
-  2. Cleanup        - Remove duplicate runes/gems from item_bases
-  3. Sync Names     - Update item names from HTML files (community names)
-  4. Icons          - Upload icons to storage and update image URLs
-  5. Runeword Icons - Generate composite runeword images from rune icons
-  6. Verify         - Verify data integrity
+  2. HTML Import    - Import expansion items from HTML pages
+  3. Cleanup        - Remove duplicate runes/gems from item_bases
+  4. Sync Names     - Update item names from HTML files (community names)
+  5. Icons          - Upload icons to storage and update image URLs
+  6. Runeword Icons - Generate composite runeword images from rune icons
+  7. Verify         - Verify data integrity
 
 Prerequisites:
   - Run 'supabase db reset' first to create schemas and tables
@@ -77,6 +79,7 @@ func init() {
 
 	seedCmd.Flags().BoolVar(&seedDryRun, "dry-run", false, "Preview all steps without making changes")
 	seedCmd.Flags().BoolVar(&seedSkipImport, "skip-import", false, "Skip catalog import step")
+	seedCmd.Flags().BoolVar(&seedSkipHTMLImport, "skip-html-import", false, "Skip HTML import step")
 	seedCmd.Flags().BoolVar(&seedSkipCleanup, "skip-cleanup", false, "Skip duplicate cleanup step")
 	seedCmd.Flags().BoolVar(&seedSkipNames, "skip-names", false, "Skip name sync step")
 	seedCmd.Flags().BoolVar(&seedSkipIcons, "skip-icons", false, "Skip icon upload step")
@@ -84,8 +87,6 @@ func init() {
 	seedCmd.Flags().BoolVar(&seedSkipVerify, "skip-verify", false, "Skip verification step")
 
 	seedCmd.Flags().StringVar(&seedCatalogPath, "catalog", "catalogs/d2", "Path to catalog folder")
-	seedCmd.Flags().StringVar(&seedSupabaseURL, "supabase-url", getEnvOrDefault("SUPABASE_URL", "http://127.0.0.1:54321"), "Supabase URL (env: SUPABASE_URL)")
-	seedCmd.Flags().StringVar(&seedSupabaseServiceKey, "supabase-service-key", getEnvOrDefault("SUPABASE_SERVICE_KEY", ""), "Supabase service role key (env: SUPABASE_SERVICE_KEY)")
 }
 
 func runSeed(cmd *cobra.Command, args []string) error {
@@ -137,7 +138,17 @@ func runSeed(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
-	// Step 2: Cleanup duplicates
+	// Step 2: HTML Import
+	if !seedSkipHTMLImport {
+		if err := seedStepHTMLImport(ctx, db); err != nil {
+			return err
+		}
+	} else {
+		PrintInfo("Skipping HTML import (--skip-html-import)")
+	}
+	fmt.Println()
+
+	// Step 3: Cleanup duplicates
 	if !seedSkipCleanup {
 		if err := seedStepCleanup(ctx, db); err != nil {
 			return err
@@ -147,7 +158,7 @@ func runSeed(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
-	// Step 3: Sync names
+	// Step 4: Sync names
 	if !seedSkipNames {
 		if err := seedStepSyncNames(ctx, db); err != nil {
 			return err
@@ -157,7 +168,7 @@ func runSeed(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
-	// Step 4: Upload icons
+	// Step 5: Upload icons
 	if !seedSkipIcons {
 		if err := seedStepUploadIcons(ctx, db); err != nil {
 			return err
@@ -167,7 +178,7 @@ func runSeed(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
-	// Step 5: Generate runeword icons
+	// Step 6: Generate runeword icons
 	if !seedSkipRunewordIcons {
 		if err := seedStepGenerateRunewordIcons(ctx, db); err != nil {
 			return err
@@ -177,13 +188,34 @@ func runSeed(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
-	// Step 6: Verify
+	// Step 7: Verify
 	if !seedSkipVerify {
 		if err := seedStepVerify(ctx, db); err != nil {
 			return err
 		}
 	} else {
 		PrintInfo("Skipping verification (--skip-verify)")
+	}
+
+	// Print combined missing stat codes warning
+	if len(seedMissingStatCodes) > 0 {
+		// Deduplicate
+		seen := make(map[string]bool)
+		var unique []string
+		for _, code := range seedMissingStatCodes {
+			if !seen[code] {
+				seen[code] = true
+				unique = append(unique, code)
+			}
+		}
+		sort.Strings(unique)
+
+		fmt.Println()
+		fmt.Printf("⚠ Missing stat codes (%d unique, not in FilterableStats):\n", len(unique))
+		for _, code := range unique {
+			fmt.Printf("  - %s\n", code)
+		}
+		fmt.Println("  Add these to internal/games/d2/statcodes.go to enable filtering/item creation.")
 	}
 
 	fmt.Println()
@@ -200,7 +232,7 @@ func runSeed(cmd *cobra.Command, args []string) error {
 
 // Step 1: Import catalog data
 func seedStepImport(ctx context.Context, db *database.DB, game string) error {
-	fmt.Println("--- Step 1/6: Catalog Import ---")
+	fmt.Println("--- Step 1/7: Catalog Import ---")
 
 	if seedDryRun {
 		PrintInfo("Would import catalog data from " + seedCatalogPath)
@@ -239,12 +271,80 @@ func seedStepImport(ctx context.Context, db *database.DB, game string) error {
 	fmt.Printf("  Item Ratios:      %d imported, %d skipped\n", stats.ItemRatios.Imported, stats.ItemRatios.Skipped)
 	fmt.Printf("  Runeword Bases:   %d imported, %d skipped\n", stats.RunewordBases.Imported, stats.RunewordBases.Skipped)
 
+	if len(stats.MissingStatCodes) > 0 {
+		fmt.Printf("\n  Missing stat codes: %d (see end of seed for combined list)\n", len(stats.MissingStatCodes))
+		seedMissingStatCodes = append(seedMissingStatCodes, stats.MissingStatCodes...)
+	}
+
 	return nil
 }
 
-// Step 2: Cleanup duplicates
+// Step 2: HTML Import
+func seedStepHTMLImport(ctx context.Context, db *database.DB) error {
+	fmt.Println("--- Step 2/7: HTML Import ---")
+
+	if seedDryRun {
+		PrintInfo("Would import expansion items from HTML pages in " + seedCatalogPath + "/pages")
+		return nil
+	}
+
+	// Initialize S3 storage for image uploads from env vars
+	var stor storage.Storage
+	s3Stor, err := seedCreateS3Storage()
+	if err != nil {
+		PrintInfo(fmt.Sprintf("S3 storage not available: %v (images will be skipped)", err))
+	} else {
+		stor = s3Stor
+		PrintSuccess("S3 storage initialized")
+	}
+
+	repo := d2.NewRepository(db.Pool())
+	importer := d2.NewHTMLImporter(repo, stor, seedDryRun, true)
+
+	PrintInfo("Importing expansion items from HTML...")
+	stats, err := importer.ImportFromHTML(ctx, seedCatalogPath, "all")
+	if err != nil {
+		return fmt.Errorf("HTML import failed: %w", err)
+	}
+
+	PrintSuccess("HTML import completed!")
+	fmt.Printf("  Bases imported:     %d\n", stats.BasesImported)
+	fmt.Printf("  Bases skipped:      %d\n", stats.BasesSkipped)
+	fmt.Printf("  Uniques imported:   %d\n", stats.UniquesImported)
+	fmt.Printf("  Uniques skipped:    %d\n", stats.UniquesSkipped)
+	fmt.Printf("  Sets imported:      %d\n", stats.SetsImported)
+	fmt.Printf("  Set items imported: %d\n", stats.SetItemsImported)
+	fmt.Printf("  Set items skipped:  %d\n", stats.SetItemsSkipped)
+	fmt.Printf("  Runewords imported: %d\n", stats.RunewordsImported)
+	fmt.Printf("  Runewords skipped:  %d\n", stats.RunewordsSkipped)
+	fmt.Printf("  Runes imported:     %d\n", stats.RunesImported)
+	fmt.Printf("  Runes skipped:      %d\n", stats.RunesSkipped)
+	fmt.Printf("  Gems imported:      %d\n", stats.GemsImported)
+	fmt.Printf("  Gems skipped:       %d\n", stats.GemsSkipped)
+	fmt.Printf("  Misc imported:      %d\n", stats.MiscImported)
+	fmt.Printf("  Misc skipped:       %d\n", stats.MiscSkipped)
+	fmt.Printf("  Images uploaded:    %d\n", stats.ImagesUploaded)
+	fmt.Printf("  Raw properties:     %d\n", stats.RawProperties)
+	fmt.Printf("  Errors:             %d\n", stats.Errors)
+
+	if len(stats.ErrorMessages) > 0 {
+		fmt.Println("\n  Errors:")
+		for _, msg := range stats.ErrorMessages {
+			fmt.Printf("    - %s\n", msg)
+		}
+	}
+
+	if len(stats.MissingStatCodes) > 0 {
+		fmt.Printf("\n  Missing stat codes: %d (see end of seed for combined list)\n", len(stats.MissingStatCodes))
+		seedMissingStatCodes = append(seedMissingStatCodes, stats.MissingStatCodes...)
+	}
+
+	return nil
+}
+
+// Step 3: Cleanup duplicates
 func seedStepCleanup(ctx context.Context, db *database.DB) error {
-	fmt.Println("--- Step 2/6: Duplicate Cleanup ---")
+	fmt.Println("--- Step 3/7: Duplicate Cleanup ---")
 
 	pool := db.Pool()
 
@@ -316,9 +416,9 @@ func seedStepCleanup(ctx context.Context, db *database.DB) error {
 	return nil
 }
 
-// Step 3: Sync names from HTML
+// Step 4: Sync names from HTML
 func seedStepSyncNames(ctx context.Context, db *database.DB) error {
-	fmt.Println("--- Step 3/6: Name Sync ---")
+	fmt.Println("--- Step 4/7: Name Sync ---")
 
 	pool := db.Pool()
 	parser := d2.NewHTMLParser()
@@ -415,25 +515,24 @@ func seedStepSyncNames(ctx context.Context, db *database.DB) error {
 	return nil
 }
 
-// Step 4: Upload icons
+// Step 5: Upload icons
 func seedStepUploadIcons(ctx context.Context, db *database.DB) error {
-	fmt.Println("--- Step 4/6: Icon Upload ---")
+	fmt.Println("--- Step 5/7: Icon Upload ---")
 
 	if seedDryRun {
 		PrintInfo("Would upload icons to storage")
 		return nil
 	}
 
-	// Initialize Supabase storage
-	supabaseStorage := storage.NewSupabaseStorage(
-		seedSupabaseURL,
-		seedSupabaseServiceKey,
-		"d2-items",
-	)
+	// Initialize S3 storage from env vars
+	s3Stor, err := seedCreateS3Storage()
+	if err != nil {
+		return fmt.Errorf("S3 storage required for icon upload: %w", err)
+	}
 
 	// Create uploader
 	repo := d2.NewRepository(db.Pool())
-	uploader := d2.NewIconUploader(repo, supabaseStorage, seedDryRun, true)
+	uploader := d2.NewIconUploader(repo, s3Stor, seedDryRun, true)
 
 	// Run upload
 	stats, err := uploader.Upload(ctx, seedCatalogPath)
@@ -450,26 +549,25 @@ func seedStepUploadIcons(ctx context.Context, db *database.DB) error {
 	return nil
 }
 
-// Step 5: Generate runeword icons
+// Step 6: Generate runeword icons
 func seedStepGenerateRunewordIcons(ctx context.Context, db *database.DB) error {
-	fmt.Println("--- Step 5/6: Runeword Icon Generation ---")
+	fmt.Println("--- Step 6/7: Runeword Icon Generation ---")
 
 	if seedDryRun {
 		PrintInfo("Would generate runeword composite icons")
 		return nil
 	}
 
-	// Initialize Supabase storage
-	supabaseStorage := storage.NewSupabaseStorage(
-		seedSupabaseURL,
-		seedSupabaseServiceKey,
-		"d2-items",
-	)
+	// Initialize S3 storage from env vars
+	s3Stor, err := seedCreateS3Storage()
+	if err != nil {
+		return fmt.Errorf("S3 storage required for runeword icon generation: %w", err)
+	}
 
 	// Create generator
 	repo := d2.NewRepository(db.Pool())
 	iconsPath := seedCatalogPath + "/icons"
-	generator := d2.NewRunewordImageGenerator(repo, supabaseStorage, iconsPath, seedDryRun, false)
+	generator := d2.NewRunewordImageGenerator(repo, s3Stor, iconsPath, seedDryRun, false)
 
 	// Run generation
 	stats, err := generator.Generate(ctx)
@@ -486,9 +584,9 @@ func seedStepGenerateRunewordIcons(ctx context.Context, db *database.DB) error {
 	return nil
 }
 
-// Step 6: Verify
+// Step 7: Verify
 func seedStepVerify(ctx context.Context, db *database.DB) error {
-	fmt.Println("--- Step 6/6: Verification ---")
+	fmt.Println("--- Step 7/7: Verification ---")
 
 	pool := db.Pool()
 
@@ -567,6 +665,24 @@ func seedStepVerify(ctx context.Context, db *database.DB) error {
 	}
 
 	return nil
+}
+
+// seedCreateS3Storage creates an S3 storage client from environment variables
+func seedCreateS3Storage() (storage.Storage, error) {
+	s3AccessKey := getEnvOrDefault("SUPABASE_S3_ACCESS_KEY", "")
+	s3SecretKey := getEnvOrDefault("SUPABASE_S3_SECRET_KEY", "")
+	if s3AccessKey == "" || s3SecretKey == "" {
+		return nil, fmt.Errorf("SUPABASE_S3_ACCESS_KEY and SUPABASE_S3_SECRET_KEY must be set")
+	}
+	supabaseURL := getEnvOrDefault("SUPABASE_URL", "http://127.0.0.1:54321")
+	return storage.NewS3Storage(
+		supabaseURL+"/storage/v1/s3",
+		s3AccessKey,
+		s3SecretKey,
+		getEnvOrDefault("SUPABASE_S3_REGION", "local"),
+		"d2-items",
+		supabaseURL,
+	)
 }
 
 func seedNormalizeForLookup(s string) string {

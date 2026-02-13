@@ -4,7 +4,13 @@
       "Bash(go get:*)",
       "Bash(go build:*)",
       "Bash(nslookup:*)",
-      "Bash(fly logs:*)"
+      "Bash(fly logs:*)",
+      "Bash(docker ps:*)",
+      "Bash(findstr:*)",
+      "Bash(netsh interface ipv4 show:*)",
+      "Bash(python3:*)",
+      "Bash(go run:*)",
+      "Bash(go vet:*)"
     ]
   }
 }

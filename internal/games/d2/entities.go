@@ -427,17 +427,18 @@ type ImportStats struct {
 
 // ImportResult holds all import statistics
 type ImportResult struct {
-	ItemTypes       ImportStats
-	ItemBases       ImportStats
-	UniqueItems     ImportStats
-	SetBonuses      ImportStats
-	SetItems        ImportStats
-	Runewords       ImportStats
-	Runes           ImportStats
-	Gems            ImportStats
-	Properties      ImportStats
-	Affixes         ImportStats
-	RunewordBases   ImportStats
-	TreasureClasses ImportStats
-	ItemRatios      ImportStats
+	ItemTypes        ImportStats
+	ItemBases        ImportStats
+	UniqueItems      ImportStats
+	SetBonuses       ImportStats
+	SetItems         ImportStats
+	Runewords        ImportStats
+	Runes            ImportStats
+	Gems             ImportStats
+	Properties       ImportStats
+	Affixes          ImportStats
+	RunewordBases    ImportStats
+	TreasureClasses  ImportStats
+	ItemRatios       ImportStats
+	MissingStatCodes []string
 }

@@ -30,6 +30,7 @@ type Importer struct {
 	repo       *Repository
 	cache      *cache.RedisCache
 	translator *PropertyTranslator
+	seenCodes  map[string]bool
 }
 
 func NewImporter(db *database.DB, redisCache *cache.RedisCache) *Importer {
@@ -37,6 +38,7 @@ func NewImporter(db *database.DB, redisCache *cache.RedisCache) *Importer {
 		repo:       NewRepository(db.Pool()),
 		cache:      redisCache,
 		translator: NewPropertyTranslator(),
+		seenCodes:  make(map[string]bool),
 	}
 }
 
@@ -158,12 +160,28 @@ func (i *Importer) Import(ctx context.Context, catalogPath string) (*ImportResul
 		result.RunewordBases = stats
 	}
 
+	// Validate seen property codes against FilterableStats registry
+	allCodes := make([]string, 0, len(i.seenCodes))
+	for code := range i.seenCodes {
+		allCodes = append(allCodes, code)
+	}
+	result.MissingStatCodes = ValidateStatCodes(allCodes)
+
 	// Clear cache after import
 	if i.cache != nil {
 		i.cache.DeleteByPattern(ctx, "d2:*")
 	}
 
 	return result, nil
+}
+
+// collectPropertyCodes records all property codes from a slice into seenCodes
+func (i *Importer) collectPropertyCodes(props []Property) {
+	for _, p := range props {
+		if p.Code != "" {
+			i.seenCodes[p.Code] = true
+		}
+	}
 }
 
 func (i *Importer) importItemTypes(ctx context.Context, catalogPath string) (ImportStats, error) {
@@ -430,6 +448,7 @@ func (i *Importer) importUniqueItems(ctx context.Context, catalogPath string) (I
 		// Parse properties
 		properties := parseProperties(r, 12, i.translator)
 		properties = combineAllAttributes(properties, i.translator)
+		i.collectPropertyCodes(properties)
 
 		// Parse ladder seasons
 		var firstSeason, lastSeason *int
@@ -501,6 +520,9 @@ func (i *Importer) importSets(ctx context.Context, catalogPath string) (ImportSt
 		fullBonuses := parseSetFullBonuses(r, i.translator)
 		fullBonuses = combineAllAttributes(fullBonuses, i.translator)
 
+		i.collectPropertyCodes(partialBonuses)
+		i.collectPropertyCodes(fullBonuses)
+
 		setBonus := &SetBonus{
 			IndexID:        idx,
 			Name:           name,
@@ -548,6 +570,9 @@ func (i *Importer) importSetItems(ctx context.Context, catalogPath string) (Impo
 		// Parse bonus properties (activated by wearing more set items)
 		bonusProperties := parseSetItemBonusProperties(r, i.translator)
 		bonusProperties = combineAllAttributes(bonusProperties, i.translator)
+
+		i.collectPropertyCodes(properties)
+		i.collectPropertyCodes(bonusProperties)
 
 		setItem := &SetItem{
 			IndexID:         indexID,
@@ -625,6 +650,7 @@ func (i *Importer) importRunewords(ctx context.Context, catalogPath string) (Imp
 		// Parse properties
 		properties := parseRunewordProperties(r, i.translator)
 		properties = combineAllAttributes(properties, i.translator)
+		i.collectPropertyCodes(properties)
 
 		// Parse ladder seasons
 		var firstSeason, lastSeason *int
@@ -730,6 +756,10 @@ func (i *Importer) importRunes(ctx context.Context, catalogPath string) (ImportS
 				shieldMods = append(shieldMods, prop)
 			}
 		}
+
+		i.collectPropertyCodes(weaponMods)
+		i.collectPropertyCodes(helmMods)
+		i.collectPropertyCodes(shieldMods)
 
 		runeMods[code] = map[string][]Property{
 			"weapon": weaponMods,
@@ -848,6 +878,10 @@ func (i *Importer) importGems(ctx context.Context, catalogPath string) (ImportSt
 				shieldMods = append(shieldMods, prop)
 			}
 		}
+
+		i.collectPropertyCodes(weaponMods)
+		i.collectPropertyCodes(helmMods)
+		i.collectPropertyCodes(shieldMods)
 
 		gem := &Gem{
 			Code:       code,

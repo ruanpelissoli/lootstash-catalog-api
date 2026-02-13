@@ -57,7 +57,7 @@ Examples:
 func init() {
 	rootCmd.AddCommand(importHTMLCmd)
 
-	importHTMLCmd.Flags().StringVar(&htmlImportType, "type", "all", "Item type to import: bases, uniques, sets, runewords, or all")
+	importHTMLCmd.Flags().StringVar(&htmlImportType, "type", "all", "Item type to import: bases, uniques, sets, runewords, runes, gems, misc, or all")
 	importHTMLCmd.Flags().StringVar(&htmlImportCatalog, "catalog", "catalogs/d2", "Path to catalog folder (contains icons/ and pages/ subfolders)")
 	importHTMLCmd.Flags().BoolVar(&htmlImportDryRun, "dry-run", false, "Preview without making changes")
 	importHTMLCmd.Flags().BoolVar(&htmlImportForce, "force", false, "Re-import existing items (overwrite with fresh data)")
@@ -146,6 +146,12 @@ func runImportHTML(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Set items skipped:  %d\n", stats.SetItemsSkipped)
 	fmt.Printf("  Runewords imported: %d\n", stats.RunewordsImported)
 	fmt.Printf("  Runewords skipped:  %d\n", stats.RunewordsSkipped)
+	fmt.Printf("  Runes imported:     %d\n", stats.RunesImported)
+	fmt.Printf("  Runes skipped:      %d\n", stats.RunesSkipped)
+	fmt.Printf("  Gems imported:      %d\n", stats.GemsImported)
+	fmt.Printf("  Gems skipped:       %d\n", stats.GemsSkipped)
+	fmt.Printf("  Misc imported:      %d\n", stats.MiscImported)
+	fmt.Printf("  Misc skipped:       %d\n", stats.MiscSkipped)
 	fmt.Printf("  Images uploaded:    %d\n", stats.ImagesUploaded)
 	fmt.Printf("  Raw properties:     %d\n", stats.RawProperties)
 	fmt.Printf("  Errors:             %d\n", stats.Errors)
@@ -155,6 +161,14 @@ func runImportHTML(cmd *cobra.Command, args []string) error {
 		for _, msg := range stats.ErrorMessages {
 			fmt.Printf("  - %s\n", msg)
 		}
+	}
+
+	if len(stats.MissingStatCodes) > 0 {
+		fmt.Println("\n⚠ Missing stat codes (not in FilterableStats):")
+		for _, code := range stats.MissingStatCodes {
+			fmt.Printf("  - %s\n", code)
+		}
+		fmt.Println("  Add these to internal/games/d2/statcodes.go to enable filtering/item creation.")
 	}
 
 	return nil

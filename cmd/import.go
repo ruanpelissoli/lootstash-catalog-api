@@ -87,5 +87,13 @@ func importD2(ctx context.Context, db *database.DB, redisCache *cache.RedisCache
 	fmt.Printf("  Item Ratios:      %d imported, %d skipped\n", stats.ItemRatios.Imported, stats.ItemRatios.Skipped)
 	fmt.Printf("  Runeword Bases:   %d imported, %d skipped\n", stats.RunewordBases.Imported, stats.RunewordBases.Skipped)
 
+	if len(stats.MissingStatCodes) > 0 {
+		fmt.Println("\n⚠ Missing stat codes (not in FilterableStats):")
+		for _, code := range stats.MissingStatCodes {
+			fmt.Printf("  - %s\n", code)
+		}
+		fmt.Println("  Add these to internal/games/d2/statcodes.go to enable filtering/item creation.")
+	}
+
 	return nil
 }
