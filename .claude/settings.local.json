@@ -10,7 +10,8 @@
       "Bash(netsh interface ipv4 show:*)",
       "Bash(python3:*)",
       "Bash(go run:*)",
-      "Bash(go vet:*)"
+      "Bash(go vet:*)",
+      "Bash(grep:*)"
     ]
   }
 }
