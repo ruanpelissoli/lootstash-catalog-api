@@ -71,7 +71,8 @@ func (h *HTMLImporterV2) ImportAll(ctx context.Context, catalogPath string) (*Im
 		return result, err
 	}
 
-	// 4. Reload rune cache after importing runes
+	// 4. Reload caches after importing misc (charms, jewels, rings are now in item_bases)
+	h.reloadBaseCache(ctx)
 	h.reloadRuneCache(ctx)
 
 	// 5. Import uniques
