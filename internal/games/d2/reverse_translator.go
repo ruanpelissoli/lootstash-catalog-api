@@ -78,36 +78,51 @@ func buildReversePattern(code, template string) *reversePattern {
 	// Escape regex special chars in the template
 	escaped := regexp.QuoteMeta(template)
 
-	// Track which groups we have
+	// Collect placeholders found in the escaped string with their positions.
+	// We must sort by position so the groups array matches capture group order
+	// in the resulting regex, regardless of placeholder declaration order.
+	type placeholderEntry struct {
+		placeholder string
+		groupName   string
+		replacement string
+		position    int
+	}
+
+	knownPlaceholders := []struct {
+		placeholder string
+		groupName   string
+		replacement string
+	}{
+		{`\{value\}`, "value", `([+-]?\d+(?:-\d+)?(?:\(\d+-\d+\))?)`},
+		{`\{min\}`, "min", `(\d+)`},
+		{`\{max\}`, "max", `(\d+)`},
+		{`\{param\}`, "param", `(.+?)`},
+		{`\{skilltab\}`, "skilltab", `(.+?)`},
+	}
+
+	var entries []placeholderEntry
+	for _, ph := range knownPlaceholders {
+		pos := strings.Index(escaped, ph.placeholder)
+		if pos != -1 {
+			entries = append(entries, placeholderEntry{
+				placeholder: ph.placeholder,
+				groupName:   ph.groupName,
+				replacement: ph.replacement,
+				position:    pos,
+			})
+		}
+	}
+
+	// Sort by position so groups array matches capture group order in the regex
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].position < entries[j].position
+	})
+
+	// Apply replacements and build groups in positional order
 	var groups []string
-
-	// Replace escaped placeholders with capture groups
-	// Note: QuoteMeta turns {value} into \{value\}
-	if strings.Contains(escaped, `\{value\}`) {
-		// Value can be a single number, range like "5-10", or negative range like "-(5-10)"
-		escaped = strings.Replace(escaped, `\{value\}`, `([+-]?\d+(?:-\d+)?(?:\(\d+-\d+\))?)`, 1)
-		groups = append(groups, "value")
-	}
-	// Handle +{value} pattern (the + is literal in template, but value might be negative)
-	if strings.Contains(escaped, `\+`+`\{value\}`) {
-		// Already handled above since we do global replacement
-	}
-
-	if strings.Contains(escaped, `\{min\}`) {
-		escaped = strings.Replace(escaped, `\{min\}`, `(\d+)`, 1)
-		groups = append(groups, "min")
-	}
-	if strings.Contains(escaped, `\{max\}`) {
-		escaped = strings.Replace(escaped, `\{max\}`, `(\d+)`, 1)
-		groups = append(groups, "max")
-	}
-	if strings.Contains(escaped, `\{param\}`) {
-		escaped = strings.Replace(escaped, `\{param\}`, `(.+?)`, 1)
-		groups = append(groups, "param")
-	}
-	if strings.Contains(escaped, `\{skilltab\}`) {
-		escaped = strings.Replace(escaped, `\{skilltab\}`, `(.+?)`, 1)
-		groups = append(groups, "skilltab")
+	for _, entry := range entries {
+		escaped = strings.Replace(escaped, entry.placeholder, entry.replacement, 1)
+		groups = append(groups, entry.groupName)
 	}
 
 	// Handle the +{value} case where the + sign is part of the template

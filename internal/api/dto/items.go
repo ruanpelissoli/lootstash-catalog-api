@@ -182,22 +182,25 @@ type GemDetail struct {
 
 // BaseItemDetail represents a base item (armor, weapon, misc)
 type BaseItemDetail struct {
-	ID           int              `json:"id"`
-	Code         string           `json:"code"`
-	Name         string           `json:"name"`
-	Type         string           `json:"type"`     // Always "base"
-	Rarity       string           `json:"rarity"`   // "normal"
-	Category     string           `json:"category"` // "armor", "weapon", "misc"
-	ItemType     string           `json:"itemType"` // "helm", "body armor", etc.
-	Requirements ItemRequirements `json:"requirements"`
-	Defense      *DefenseRange    `json:"defense,omitempty"`
-	Damage       *DamageRange     `json:"damage,omitempty"`
-	Speed        int              `json:"speed,omitempty"`
-	MaxSockets   int              `json:"maxSockets"`
-	Durability   int              `json:"durability"`
-	QualityTiers QualityTiers     `json:"qualityTiers,omitempty"`
-	ImageURL     string           `json:"imageUrl,omitempty"`
-	IconVariants []string         `json:"iconVariants,omitempty"`
+	ID            int              `json:"id"`
+	Code          string           `json:"code"`
+	Name          string           `json:"name"`
+	Type          string           `json:"type"`     // Always "base"
+	Rarity        string           `json:"rarity"`   // "normal"
+	Category      string           `json:"category"` // "armor", "weapon", "misc"
+	ItemType      string           `json:"itemType"` // "helm", "body armor", etc.
+	Tier          string           `json:"tier,omitempty"`
+	TypeTags      []string         `json:"typeTags,omitempty"`
+	ClassSpecific string           `json:"classSpecific,omitempty"`
+	Requirements  ItemRequirements `json:"requirements"`
+	Defense       *DefenseRange    `json:"defense,omitempty"`
+	Damage        *DamageRange     `json:"damage,omitempty"`
+	Speed         int              `json:"speed,omitempty"`
+	MaxSockets    int              `json:"maxSockets"`
+	Durability    int              `json:"durability"`
+	QualityTiers  QualityTiers     `json:"qualityTiers,omitempty"`
+	ImageURL      string           `json:"imageUrl,omitempty"`
+	IconVariants  []string         `json:"iconVariants,omitempty"`
 }
 
 // DefenseRange represents armor defense values

@@ -480,6 +480,7 @@ func (r *Repository) GetItemBase(ctx context.Context, id int) (*ItemBase, error)
 	sql := `
 		SELECT
 			id, code, name, item_type, item_type2, category,
+			COALESCE(tier, 'Normal'), COALESCE(type_tags, '{}'), class_specific, COALESCE(tradable, true),
 			level, level_req, str_req, dex_req, durability,
 			min_ac, max_ac, min_dam, max_dam, two_hand_min_dam, two_hand_max_dam,
 			range_adder, speed, str_bonus, dex_bonus,
@@ -494,10 +495,11 @@ func (r *Repository) GetItemBase(ctx context.Context, id int) (*ItemBase, error)
 
 	var ib ItemBase
 	var itemType2, normalCode, exceptionalCode, eliteCode *string
-	var invFile, flippyFile, uniqueInvFile, setInvFile, imageURL, description *string
+	var invFile, flippyFile, uniqueInvFile, setInvFile, imageURL, description, classSpecific *string
 
 	err := r.pool.QueryRow(ctx, sql, id).Scan(
 		&ib.ID, &ib.Code, &ib.Name, &ib.ItemType, &itemType2, &ib.Category,
+		&ib.Tier, &ib.TypeTags, &classSpecific, &ib.Tradable,
 		&ib.Level, &ib.LevelReq, &ib.StrReq, &ib.DexReq, &ib.Durability,
 		&ib.MinAC, &ib.MaxAC, &ib.MinDam, &ib.MaxDam, &ib.TwoHandMinDam, &ib.TwoHandMaxDam,
 		&ib.RangeAdder, &ib.Speed, &ib.StrBonus, &ib.DexBonus,
@@ -540,6 +542,9 @@ func (r *Repository) GetItemBase(ctx context.Context, id int) (*ItemBase, error)
 	}
 	if description != nil {
 		ib.Description = *description
+	}
+	if classSpecific != nil {
+		ib.ClassSpecific = *classSpecific
 	}
 
 	return &ib, nil

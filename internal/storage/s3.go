@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -42,6 +43,9 @@ func NewS3Storage(endpoint, accessKey, secretKey, region, bucketName, publicURL 
 
 // UploadImage uploads an image to S3 storage and returns the public URL
 func (s *S3Storage) UploadImage(ctx context.Context, path string, data []byte, contentType string) (string, error) {
+	uploadCtx, uploadCancel := context.WithTimeout(ctx, 60*time.Second)
+	defer uploadCancel()
+
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucketName),
 		Key:         aws.String(path),
@@ -49,7 +53,7 @@ func (s *S3Storage) UploadImage(ctx context.Context, path string, data []byte, c
 		ContentType: aws.String(contentType),
 	}
 
-	_, err := s.client.PutObjectWithContext(ctx, input)
+	_, err := s.client.PutObjectWithContext(uploadCtx, input)
 	if err != nil {
 		return "", fmt.Errorf("failed to upload to S3: %w", err)
 	}

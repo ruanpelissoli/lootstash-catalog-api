@@ -46,14 +46,22 @@ type HTMLParsedFullSet struct {
 	FullBonuses    []string // Text of full set bonuses
 }
 
+// HTMLVariantLink represents a link to a base item variant (normal/exceptional/elite)
+type HTMLVariantLink struct {
+	Name string
+	Tier string // "Normal", "Exceptional", "Elite"
+}
+
 // HTMLParsedBaseItem represents a base item extracted from HTML
 type HTMLParsedBaseItem struct {
 	Name         string
 	Quality      string // "Normal", "Exceptional", "Elite"
 	TypeName     string // Primary type from hidden span, e.g., "Grimoires"
 	TypeName2    string // Secondary type, e.g., "Shields"
+	TypeTags     []string // All matched type tags from hidden span
 	ImagePath    string
 	URLSlug      string // From href, used for code generation
+	VariantNames []HTMLVariantLink // Links to normal/exceptional/elite variants
 
 	// Stats
 	DefenseMin   int
@@ -96,9 +104,10 @@ type HTMLParsedGem struct {
 
 // HTMLParsedMiscItem represents a miscellaneous item extracted from misc.html
 type HTMLParsedMiscItem struct {
-	Name        string
-	ImagePath   string
-	Description string // e.g. "Terrorizes Act 2 when used"
+	Name         string
+	ImagePath    string
+	Description  string // e.g. "Terrorizes Act 2 when used"
+	SubCategory  string // "Small Charm", "Large Charm", "Grand Charm", "Jewel", "Key", "Essence", etc.
 }
 
 // HTMLParsedRuneword represents a runeword extracted from HTML
@@ -148,6 +157,16 @@ func (p *HTMLItemParser) ParseSetsFile(filePath string) ([]HTMLParsedSetItem, []
 	setMap := make(map[string]*HTMLParsedFullSet) // setName -> full set bonuses
 
 	doc.Find("article.element-item").Each(func(i int, s *goquery.Selection) {
+		// Check if this is a full set article (h4 contains "Full Set")
+		h4 := s.Find("h4").First()
+		if h4.Length() > 0 && strings.Contains(h4.Text(), "Full Set") {
+			fs := p.parseFullSetArticle(s)
+			if fs.Name != "" {
+				setMap[fs.Name] = &fs
+			}
+			return
+		}
+
 		item := p.parseSetArticle(s)
 		if item.Name != "" && item.SetName != "" {
 			setItems = append(setItems, item)
@@ -234,9 +253,28 @@ func (p *HTMLItemParser) ParseMiscFile(filePath string) ([]HTMLParsedRune, []HTM
 			if gem.Name != "" {
 				gems = append(gems, gem)
 			}
-		case h4Text == "Miscellaneous Item":
+		case h4Text == "Miscellaneous Item",
+			h4Text == "Small Charm", h4Text == "Large Charm", h4Text == "Grand Charm",
+			h4Text == "Jewel", h4Text == "Key", h4Text == "Essence":
 			item := p.parseMiscArticle(s)
 			if item.Name != "" {
+				// Set subcategory based on h4 text
+				switch h4Text {
+				case "Small Charm":
+					item.SubCategory = "Small Charm"
+				case "Large Charm":
+					item.SubCategory = "Large Charm"
+				case "Grand Charm":
+					item.SubCategory = "Grand Charm"
+				case "Jewel":
+					item.SubCategory = "Jewel"
+				case "Key":
+					item.SubCategory = "Key"
+				case "Essence":
+					item.SubCategory = "Essence"
+				default:
+					item.SubCategory = "Miscellaneous"
+				}
 				miscItems = append(miscItems, item)
 			}
 		// Skip: Quest Item, Potion, Consumable, Crafted Item, etc.
@@ -525,7 +563,10 @@ func (p *HTMLItemParser) parseBaseArticle(s *goquery.Selection) HTMLParsedBaseIt
 	}
 
 	// Extract item types from hidden span
-	item.TypeName, item.TypeName2 = p.extractItemTypesFromHidden(s)
+	item.TypeName, item.TypeName2, item.TypeTags = p.extractItemTypesFromHidden(s)
+
+	// Extract variant names from "Variants:" section
+	item.VariantNames = p.extractVariantNames(s)
 
 	// Extract stats from p.z-smallstats
 	firstStats := s.Find("p.z-smallstats").First()
@@ -575,8 +616,9 @@ func extractSlugFromHref(href string) string {
 	return slug
 }
 
-// extractItemTypesFromHidden extracts item type names from the hidden span at the start of the article
-func (p *HTMLItemParser) extractItemTypesFromHidden(s *goquery.Selection) (string, string) {
+// extractItemTypesFromHidden extracts item type names from the hidden span at the start of the article.
+// Returns (primaryType, secondaryType, allTypeTags).
+func (p *HTMLItemParser) extractItemTypesFromHidden(s *goquery.Selection) (string, string, []string) {
 	// Get text from the first direct child hidden span
 	hiddenText := ""
 	s.ChildrenFiltered("span.z-hidden").First().Each(func(i int, span *goquery.Selection) {
@@ -589,7 +631,7 @@ func (p *HTMLItemParser) extractItemTypesFromHidden(s *goquery.Selection) (strin
 	hiddenText = strings.TrimSpace(hiddenText)
 
 	if hiddenText == "" {
-		return "", ""
+		return "", "", nil
 	}
 
 	// Known type names — all types we can match
@@ -626,20 +668,49 @@ func (p *HTMLItemParser) extractItemTypesFromHidden(s *goquery.Selection) (strin
 		}
 	}
 
-	// Deduplicate: skip broader categories that overlap with specific ones
-	// e.g., if "Swords" matched, skip "Weapons" since it's broader
-	type1, type2 := "", ""
-	if len(matches) >= 1 {
-		type1 = matches[0].name
-	}
-	// Find second distinct type (different from first)
-	for _, m := range matches[1:] {
-		if m.name != type1 {
-			type2 = m.name
-			break
+	// Collect all unique type tags
+	var allTags []string
+	seen := make(map[string]bool)
+	for _, m := range matches {
+		if !seen[m.name] {
+			allTags = append(allTags, m.name)
+			seen[m.name] = true
 		}
 	}
-	return type1, type2
+
+	type1, type2 := "", ""
+	if len(allTags) >= 1 {
+		type1 = allTags[0]
+	}
+	if len(allTags) >= 2 {
+		type2 = allTags[1]
+	}
+	return type1, type2, allTags
+}
+
+// classSpecificFromTypeTags detects class-specific items from type tags
+func classSpecificFromTypeTags(tags []string) string {
+	for _, tag := range tags {
+		switch tag {
+		case "Amazon Weapons":
+			return "amazon"
+		case "Paladin Shields":
+			return "paladin"
+		case "Necromancer Shields", "Shrunken Heads":
+			return "necromancer"
+		case "Barbarian Helms":
+			return "barbarian"
+		case "Druid Pelts":
+			return "druid"
+		case "Claws":
+			return "assassin"
+		case "Grimoires":
+			return "warlock"
+		case "Orbs":
+			return "sorceress"
+		}
+	}
+	return ""
 }
 
 // extractSpanRange gets a range value like "103-148" or "3-8" from a span
@@ -764,6 +835,16 @@ func (p *HTMLItemParser) extractQualityAndBase(s *goquery.Selection) (string, st
 			baseName = strings.TrimSpace(a.Text())
 		}
 	})
+
+	// Fallback: some items (charms, jewels, rings, amulets) don't have a base link.
+	// The base name appears as <span class="z-white"> inside the h4.
+	if baseName == "" {
+		h4.Find(`span.z-white`).Each(func(i int, span *goquery.Selection) {
+			if baseName == "" {
+				baseName = strings.TrimSpace(span.Text())
+			}
+		})
+	}
 
 	return quality, baseName
 }
@@ -948,6 +1029,99 @@ func isJustNumber(s string) bool {
 	}
 	_, err := strconv.Atoi(s)
 	return err == nil
+}
+
+// parseFullSetArticle extracts full set bonus data from a full set article
+func (p *HTMLItemParser) parseFullSetArticle(s *goquery.Selection) HTMLParsedFullSet {
+	var fs HTMLParsedFullSet
+
+	fs.Name = p.extractName(s)
+	if fs.Name == "" {
+		return fs
+	}
+
+	// Extract bonuses from p.z-smallstats sections
+	// Partial bonuses have "(N set items)" labels, full set bonuses come after "Full Set"
+	inFullSet := false
+	s.Find("p.z-smallstats").Each(func(i int, stats *goquery.Selection) {
+		html, _ := stats.Html()
+		lines := p.cleanPropertyHTML(html)
+
+		// Check if this section has "Full Set" header
+		statsText := stats.Text()
+		if strings.Contains(statsText, "Full Set") {
+			inFullSet = true
+		}
+
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			// Skip "Full Set" label itself
+			if strings.TrimSpace(line) == "Full Set" {
+				inFullSet = true
+				continue
+			}
+			if inFullSet {
+				fs.FullBonuses = append(fs.FullBonuses, line)
+			} else {
+				fs.PartialBonuses = append(fs.PartialBonuses, line)
+			}
+		}
+	})
+
+	return fs
+}
+
+// extractVariantNames extracts variant links (normal/exceptional/elite) from the base item article
+func (p *HTMLItemParser) extractVariantNames(s *goquery.Selection) []HTMLVariantLink {
+	var variants []HTMLVariantLink
+
+	// Look for "Variants:" text in the article
+	s.Find("h4").Each(func(i int, h4 *goquery.Selection) {
+		if !strings.Contains(h4.Text(), "Variant") {
+			return
+		}
+		// Find links within or after this h4
+		h4.Find("a").Each(func(j int, a *goquery.Selection) {
+			name := strings.TrimSpace(a.Text())
+			if name == "" {
+				return
+			}
+			// Determine tier from h4 context or link text
+			tier := "Normal"
+			h4Text := h4.Text()
+			if strings.Contains(h4Text, "Exceptional") {
+				tier = "Exceptional"
+			} else if strings.Contains(h4Text, "Elite") {
+				tier = "Elite"
+			}
+			variants = append(variants, HTMLVariantLink{Name: name, Tier: tier})
+		})
+	})
+
+	// Also look for variant links in the article body
+	s.Find(`a[href*="/base/"]`).Each(func(i int, a *goquery.Selection) {
+		// Skip the first base link (that's the item's own base, handled elsewhere)
+		if i == 0 {
+			return
+		}
+		name := strings.TrimSpace(a.Text())
+		if name != "" && !containsVariant(variants, name) {
+			variants = append(variants, HTMLVariantLink{Name: name})
+		}
+	})
+
+	return variants
+}
+
+func containsVariant(variants []HTMLVariantLink, name string) bool {
+	for _, v := range variants {
+		if v.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // isBaseStatLabel checks if text is a base item stat label (not a property)

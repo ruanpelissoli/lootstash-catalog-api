@@ -16,6 +16,11 @@ type ItemHandler struct {
 	translator *d2.PropertyTranslator
 }
 
+// slugifyParam lowercases and replaces spaces with hyphens for composite stat codes.
+func slugifyParam(s string) string {
+	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(s), " ", "-"))
+}
+
 // capitalize returns a string with the first letter uppercased
 func capitalize(s string) string {
 	if s == "" {
@@ -852,6 +857,9 @@ func (h *ItemHandler) convertBaseToDTO(item *d2.ItemBase, itemType *d2.ItemType)
 		Type:     "Base",
 		Rarity:   "Normal",
 		Category: capitalize(item.Category),
+		Tier:          item.Tier,
+		TypeTags:      item.TypeTags,
+		ClassSpecific: item.ClassSpecific,
 		Requirements: dto.ItemRequirements{
 			Level:     item.LevelReq,
 			Strength:  item.StrReq,
@@ -916,10 +924,16 @@ func (h *ItemHandler) convertPropertiesToAffixes(props []d2.Property) []dto.Item
 			hasRange = prop.Min != prop.Max
 		}
 
+		// Generate composite code for parametric stats (e.g. "charged-hydra")
+		code := prop.Code
+		if prop.Param != "" {
+			code = prop.Code + "-" + slugifyParam(prop.Param)
+		}
+
 		affix := dto.ItemAffix{
 			Name:        name,
 			DisplayName: h.translator.GetDisplayName(prop.Code),
-			Code:        prop.Code,
+			Code:        code,
 			HasRange:    hasRange,
 		}
 
@@ -942,14 +956,30 @@ func (h *ItemHandler) convertPropertiesToAffixes(props []d2.Property) []dto.Item
 // GetAllStats returns all filterable stat codes for marketplace filtering
 // GET /api/d2/stats
 func (h *ItemHandler) GetAllStats(c *fiber.Ctx) error {
-	stats := d2.FilterableStats()
+	stats, err := h.repo.GetAllStats(c.Context())
+	if err != nil {
+		// Fallback to hardcoded stats if DB query fails
+		hardcoded := d2.FilterableStats()
+		results := make([]dto.StatCode, 0, len(hardcoded))
+		for _, s := range hardcoded {
+			results = append(results, dto.StatCode{
+				Code:        s.Code,
+				Name:        s.Name,
+				Description: s.Description,
+				Category:    s.Category,
+				Aliases:     s.Aliases,
+				IsVariable:  s.IsVariable,
+			})
+		}
+		return c.JSON(results)
+	}
 
 	results := make([]dto.StatCode, 0, len(stats))
 	for _, s := range stats {
 		results = append(results, dto.StatCode{
 			Code:        s.Code,
 			Name:        s.Name,
-			Description: s.Description,
+			Description: s.DisplayText,
 			Category:    s.Category,
 			Aliases:     s.Aliases,
 			IsVariable:  s.IsVariable,

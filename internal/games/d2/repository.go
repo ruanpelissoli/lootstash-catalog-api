@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -58,18 +59,24 @@ func (r *Repository) ItemBaseExists(ctx context.Context, code string) (bool, err
 
 func (r *Repository) UpsertItemBase(ctx context.Context, ib *ItemBase) error {
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO d2.item_bases (code, name, item_type, item_type2, category, level, level_req, str_req, dex_req,
+		INSERT INTO d2.item_bases (code, name, item_type, item_type2, category, tier, type_tags, class_specific, tradable,
+			level, level_req, str_req, dex_req,
 			durability, min_ac, max_ac, min_dam, max_dam, two_hand_min_dam, two_hand_max_dam, range_adder, speed,
 			str_bonus, dex_bonus, max_sockets, gem_apply_type, normal_code, exceptional_code, elite_code,
 			inv_width, inv_height, inv_file, flippy_file, unique_inv_file, set_inv_file, image_url,
 			spawnable, stackable, useable, throwable, quest_item, rarity, cost)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-			$21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39)
+			$21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39,
+			$40, $41, $42, $43)
 		ON CONFLICT (code) DO UPDATE SET
 			name = EXCLUDED.name,
 			item_type = EXCLUDED.item_type,
 			item_type2 = EXCLUDED.item_type2,
 			category = EXCLUDED.category,
+			tier = EXCLUDED.tier,
+			type_tags = EXCLUDED.type_tags,
+			class_specific = EXCLUDED.class_specific,
+			tradable = EXCLUDED.tradable,
 			level = EXCLUDED.level,
 			level_req = EXCLUDED.level_req,
 			str_req = EXCLUDED.str_req,
@@ -105,7 +112,9 @@ func (r *Repository) UpsertItemBase(ctx context.Context, ib *ItemBase) error {
 			rarity = EXCLUDED.rarity,
 			cost = EXCLUDED.cost,
 			updated_at = NOW()`,
-		ib.Code, ib.Name, ib.ItemType, nullString(ib.ItemType2), ib.Category, ib.Level, ib.LevelReq, ib.StrReq, ib.DexReq,
+		ib.Code, ib.Name, ib.ItemType, nullString(ib.ItemType2), ib.Category,
+		nullString(ib.Tier), ib.TypeTags, nullString(ib.ClassSpecific), ib.Tradable,
+		ib.Level, ib.LevelReq, ib.StrReq, ib.DexReq,
 		ib.Durability, ib.MinAC, ib.MaxAC, ib.MinDam, ib.MaxDam, ib.TwoHandMinDam, ib.TwoHandMaxDam, ib.RangeAdder, ib.Speed,
 		ib.StrBonus, ib.DexBonus, ib.MaxSockets, ib.GemApplyType, nullString(ib.NormalCode), nullString(ib.ExceptionalCode),
 		nullString(ib.EliteCode), ib.InvWidth, ib.InvHeight, nullString(ib.InvFile), nullString(ib.FlippyFile),
@@ -148,7 +157,40 @@ func (r *Repository) UpsertUniqueItem(ctx context.Context, ui *UniqueItem) error
 			cost_add = EXCLUDED.cost_add,
 			updated_at = NOW()`,
 		ui.IndexID, ui.Name, ui.BaseCode, nullString(ui.BaseName), ui.Level, ui.LevelReq, ui.Rarity, ui.Enabled,
-		ui.LadderOnly, ui.FirstLadderSeason, ui.LastLadderSeason, propsJSON,
+		ui.LadderOnly, ui.FirstLadderSeason, ui.LastLadderSeason, string(propsJSON),
+		nullString(ui.InvTransform), nullString(ui.ChrTransform), nullString(ui.InvFile), nullString(ui.ImageURL),
+		ui.CostMult, ui.CostAdd)
+	return err
+}
+
+// UpsertUniqueItemByName upserts a unique item using name as the conflict key
+func (r *Repository) UpsertUniqueItemByName(ctx context.Context, ui *UniqueItem) error {
+	propsJSON, _ := json.Marshal(ui.Properties)
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO d2.unique_items (index_id, name, base_code, base_name, level, level_req, rarity, enabled,
+			ladder_only, first_ladder_season, last_ladder_season, properties, inv_transform, chr_transform,
+			inv_file, image_url, cost_mult, cost_add)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		ON CONFLICT (name) DO UPDATE SET
+			base_code = CASE WHEN EXCLUDED.base_code != '' THEN EXCLUDED.base_code ELSE d2.unique_items.base_code END,
+			base_name = COALESCE(EXCLUDED.base_name, d2.unique_items.base_name),
+			level = EXCLUDED.level,
+			level_req = EXCLUDED.level_req,
+			rarity = EXCLUDED.rarity,
+			enabled = EXCLUDED.enabled,
+			ladder_only = EXCLUDED.ladder_only,
+			first_ladder_season = EXCLUDED.first_ladder_season,
+			last_ladder_season = EXCLUDED.last_ladder_season,
+			properties = EXCLUDED.properties,
+			inv_transform = EXCLUDED.inv_transform,
+			chr_transform = EXCLUDED.chr_transform,
+			inv_file = EXCLUDED.inv_file,
+			image_url = COALESCE(EXCLUDED.image_url, d2.unique_items.image_url),
+			cost_mult = EXCLUDED.cost_mult,
+			cost_add = EXCLUDED.cost_add,
+			updated_at = NOW()`,
+		ui.IndexID, ui.Name, ui.BaseCode, nullString(ui.BaseName), ui.Level, ui.LevelReq, ui.Rarity, ui.Enabled,
+		ui.LadderOnly, ui.FirstLadderSeason, ui.LastLadderSeason, string(propsJSON),
 		nullString(ui.InvTransform), nullString(ui.ChrTransform), nullString(ui.InvFile), nullString(ui.ImageURL),
 		ui.CostMult, ui.CostAdd)
 	return err
@@ -172,7 +214,7 @@ func (r *Repository) UpsertSetBonus(ctx context.Context, sb *SetBonus) error {
 			partial_bonuses = EXCLUDED.partial_bonuses,
 			full_bonuses = EXCLUDED.full_bonuses,
 			updated_at = NOW()`,
-		sb.IndexID, sb.Name, sb.Version, partialJSON, fullJSON)
+		sb.IndexID, sb.Name, sb.Version, string(partialJSON), string(fullJSON))
 	return err
 }
 
@@ -208,7 +250,37 @@ func (r *Repository) UpsertSetItem(ctx context.Context, si *SetItem) error {
 			cost_add = EXCLUDED.cost_add,
 			updated_at = NOW()`,
 		si.IndexID, si.Name, si.SetName, si.BaseCode, nullString(si.BaseName), si.Level, si.LevelReq, si.Rarity,
-		propsJSON, bonusJSON, nullString(si.InvTransform), nullString(si.ChrTransform),
+		string(propsJSON), string(bonusJSON), nullString(si.InvTransform), nullString(si.ChrTransform),
+		nullString(si.InvFile), nullString(si.ImageURL), si.CostMult, si.CostAdd)
+	return err
+}
+
+// UpsertSetItemByName upserts a set item using name as the conflict key
+func (r *Repository) UpsertSetItemByName(ctx context.Context, si *SetItem) error {
+	propsJSON, _ := json.Marshal(si.Properties)
+	bonusJSON, _ := json.Marshal(si.BonusProperties)
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO d2.set_items (index_id, name, set_name, base_code, base_name, level, level_req, rarity,
+			properties, bonus_properties, inv_transform, chr_transform, inv_file, image_url, cost_mult, cost_add)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		ON CONFLICT (name) DO UPDATE SET
+			set_name = EXCLUDED.set_name,
+			base_code = CASE WHEN EXCLUDED.base_code != '' THEN EXCLUDED.base_code ELSE d2.set_items.base_code END,
+			base_name = COALESCE(EXCLUDED.base_name, d2.set_items.base_name),
+			level = EXCLUDED.level,
+			level_req = EXCLUDED.level_req,
+			rarity = EXCLUDED.rarity,
+			properties = EXCLUDED.properties,
+			bonus_properties = EXCLUDED.bonus_properties,
+			inv_transform = EXCLUDED.inv_transform,
+			chr_transform = EXCLUDED.chr_transform,
+			inv_file = EXCLUDED.inv_file,
+			image_url = COALESCE(EXCLUDED.image_url, d2.set_items.image_url),
+			cost_mult = EXCLUDED.cost_mult,
+			cost_add = EXCLUDED.cost_add,
+			updated_at = NOW()`,
+		si.IndexID, si.Name, si.SetName, si.BaseCode, nullString(si.BaseName), si.Level, si.LevelReq, si.Rarity,
+		string(propsJSON), string(bonusJSON), nullString(si.InvTransform), nullString(si.ChrTransform),
 		nullString(si.InvFile), nullString(si.ImageURL), si.CostMult, si.CostAdd)
 	return err
 }
@@ -242,7 +314,7 @@ func (r *Repository) UpsertRuneword(ctx context.Context, rw *Runeword) error {
 			image_url = COALESCE(EXCLUDED.image_url, d2.runewords.image_url),
 			updated_at = NOW()`,
 		rw.Name, rw.DisplayName, rw.Complete, rw.LadderOnly, rw.FirstLadderSeason, rw.LastLadderSeason,
-		validTypesJSON, excludedTypesJSON, runesJSON, propsJSON, nullString(rw.ImageURL))
+		string(validTypesJSON), string(excludedTypesJSON), string(runesJSON), string(propsJSON), nullString(rw.ImageURL))
 	return err
 }
 
@@ -272,7 +344,7 @@ func (r *Repository) UpsertRune(ctx context.Context, rn *Rune) error {
 			image_url = COALESCE(EXCLUDED.image_url, d2.runes.image_url),
 			cost = EXCLUDED.cost,
 			updated_at = NOW()`,
-		rn.Code, rn.Name, rn.RuneNumber, rn.Level, rn.LevelReq, weaponJSON, helmJSON, shieldJSON,
+		rn.Code, rn.Name, rn.RuneNumber, rn.Level, rn.LevelReq, string(weaponJSON), string(helmJSON), string(shieldJSON),
 		nullString(rn.InvFile), nullString(rn.ImageURL), rn.Cost)
 	return err
 }
@@ -302,100 +374,147 @@ func (r *Repository) UpsertGem(ctx context.Context, g *Gem) error {
 			inv_file = EXCLUDED.inv_file,
 			image_url = COALESCE(EXCLUDED.image_url, d2.gems.image_url),
 			updated_at = NOW()`,
-		g.Code, g.Name, g.GemType, g.Quality, weaponJSON, helmJSON, shieldJSON,
+		g.Code, g.Name, g.GemType, g.Quality, string(weaponJSON), string(helmJSON), string(shieldJSON),
 		g.Transform, nullString(g.InvFile), nullString(g.ImageURL))
 	return err
 }
 
-// Property operations
-func (r *Repository) PropertyExists(ctx context.Context, code string) (bool, error) {
-	var exists bool
-	err := r.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM d2.properties WHERE code = $1)", code).Scan(&exists)
-	return exists, err
-}
+// Stat operations
 
-func (r *Repository) UpsertProperty(ctx context.Context, p *ItemProperty) error {
+// UpsertStat inserts or updates a stat in the registry
+func (r *Repository) UpsertStat(ctx context.Context, s *Stat) error {
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO d2.properties (code, enabled, func1, stat1, func2, stat2, func3, stat3, func4, stat4,
-			func5, stat5, func6, stat6, func7, stat7, tooltip)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		INSERT INTO d2.stats (code, name, display_text, category, is_variable, is_parametric, aliases, sort_order)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (code) DO UPDATE SET
-			enabled = EXCLUDED.enabled,
-			func1 = EXCLUDED.func1,
-			stat1 = EXCLUDED.stat1,
-			func2 = EXCLUDED.func2,
-			stat2 = EXCLUDED.stat2,
-			func3 = EXCLUDED.func3,
-			stat3 = EXCLUDED.stat3,
-			func4 = EXCLUDED.func4,
-			stat4 = EXCLUDED.stat4,
-			func5 = EXCLUDED.func5,
-			stat5 = EXCLUDED.stat5,
-			func6 = EXCLUDED.func6,
-			stat6 = EXCLUDED.stat6,
-			func7 = EXCLUDED.func7,
-			stat7 = EXCLUDED.stat7,
-			tooltip = EXCLUDED.tooltip,
+			name = EXCLUDED.name,
+			display_text = EXCLUDED.display_text,
+			category = EXCLUDED.category,
+			is_variable = EXCLUDED.is_variable,
+			is_parametric = EXCLUDED.is_parametric,
+			aliases = EXCLUDED.aliases,
+			sort_order = EXCLUDED.sort_order,
 			updated_at = NOW()`,
-		p.Code, p.Enabled, p.Func1, nullString(p.Stat1), p.Func2, nullString(p.Stat2),
-		p.Func3, nullString(p.Stat3), p.Func4, nullString(p.Stat4), p.Func5, nullString(p.Stat5),
-		p.Func6, nullString(p.Stat6), p.Func7, nullString(p.Stat7), nullString(p.Tooltip))
+		s.Code, s.Name, s.DisplayText, s.Category, s.IsVariable, s.IsParametric, s.Aliases, s.SortOrder)
 	return err
 }
 
-// Affix operations
-func (r *Repository) AffixExists(ctx context.Context, name, affixType string) (bool, error) {
-	var exists bool
-	err := r.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM d2.affixes WHERE name = $1 AND affix_type = $2)", name, affixType).Scan(&exists)
-	return exists, err
+// GetAllStats returns all stats ordered by category and sort_order
+func (r *Repository) GetAllStats(ctx context.Context) ([]Stat, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, code, name, display_text, category, is_variable, is_parametric,
+			COALESCE(aliases, '{}'), sort_order, created_at, updated_at
+		FROM d2.stats
+		ORDER BY sort_order, category, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []Stat
+	for rows.Next() {
+		var s Stat
+		if err := rows.Scan(&s.ID, &s.Code, &s.Name, &s.DisplayText, &s.Category,
+			&s.IsVariable, &s.IsParametric, &s.Aliases, &s.SortOrder, &s.CreatedAt, &s.UpdatedAt); err != nil {
+			return nil, err
+		}
+		stats = append(stats, s)
+	}
+	return stats, rows.Err()
 }
 
-func (r *Repository) UpsertAffix(ctx context.Context, a *Affix) error {
-	validTypesJSON, _ := json.Marshal(a.ValidItemTypes)
-	excludedTypesJSON, _ := json.Marshal(a.ExcludedItemTypes)
-	_, err := r.pool.Exec(ctx, `
-		INSERT INTO d2.affixes (name, affix_type, version, spawnable, rare, level, max_level, level_req,
-			class_specific, class_level_req, frequency, affix_group, mod1_code, mod1_param, mod1_min, mod1_max,
-			mod2_code, mod2_param, mod2_min, mod2_max, mod3_code, mod3_param, mod3_min, mod3_max,
-			valid_item_types, excluded_item_types, transform_color, multiply, add_cost)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-			$21, $22, $23, $24, $25, $26, $27, $28, $29)
-		ON CONFLICT (name, affix_type) DO UPDATE SET
-			version = EXCLUDED.version,
-			spawnable = EXCLUDED.spawnable,
-			rare = EXCLUDED.rare,
-			level = EXCLUDED.level,
-			max_level = EXCLUDED.max_level,
-			level_req = EXCLUDED.level_req,
-			class_specific = EXCLUDED.class_specific,
-			class_level_req = EXCLUDED.class_level_req,
-			frequency = EXCLUDED.frequency,
-			affix_group = EXCLUDED.affix_group,
-			mod1_code = EXCLUDED.mod1_code,
-			mod1_param = EXCLUDED.mod1_param,
-			mod1_min = EXCLUDED.mod1_min,
-			mod1_max = EXCLUDED.mod1_max,
-			mod2_code = EXCLUDED.mod2_code,
-			mod2_param = EXCLUDED.mod2_param,
-			mod2_min = EXCLUDED.mod2_min,
-			mod2_max = EXCLUDED.mod2_max,
-			mod3_code = EXCLUDED.mod3_code,
-			mod3_param = EXCLUDED.mod3_param,
-			mod3_min = EXCLUDED.mod3_min,
-			mod3_max = EXCLUDED.mod3_max,
-			valid_item_types = EXCLUDED.valid_item_types,
-			excluded_item_types = EXCLUDED.excluded_item_types,
-			transform_color = EXCLUDED.transform_color,
-			multiply = EXCLUDED.multiply,
-			add_cost = EXCLUDED.add_cost,
-			updated_at = NOW()`,
-		a.Name, a.AffixType, a.Version, a.Spawnable, a.Rare, a.Level, a.MaxLevel, a.LevelReq,
-		nullString(a.ClassSpecific), a.ClassLevelReq, a.Frequency, a.AffixGroup,
-		nullString(a.Mod1Code), nullString(a.Mod1Param), a.Mod1Min, a.Mod1Max,
-		nullString(a.Mod2Code), nullString(a.Mod2Param), a.Mod2Min, a.Mod2Max,
-		nullString(a.Mod3Code), nullString(a.Mod3Param), a.Mod3Min, a.Mod3Max,
-		validTypesJSON, excludedTypesJSON, nullString(a.TransformColor), a.Multiply, a.AddCost)
+// GetStatByCode returns a stat by its code
+func (r *Repository) GetStatByCode(ctx context.Context, code string) (*Stat, error) {
+	var s Stat
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, code, name, display_text, category, is_variable, is_parametric,
+			COALESCE(aliases, '{}'), sort_order, created_at, updated_at
+		FROM d2.stats WHERE code = $1`, code).Scan(
+		&s.ID, &s.Code, &s.Name, &s.DisplayText, &s.Category,
+		&s.IsVariable, &s.IsParametric, &s.Aliases, &s.SortOrder, &s.CreatedAt, &s.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// GetAllStatCodes returns all existing stat codes as a set
+func (r *Repository) GetAllStatCodes(ctx context.Context) (map[string]bool, error) {
+	rows, err := r.pool.Query(ctx, `SELECT code FROM d2.stats`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]bool)
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			return nil, err
+		}
+		result[code] = true
+	}
+	return result, rows.Err()
+}
+
+// UpdateItemBaseVariants updates the variant links (normal/exceptional/elite) for a base item.
+// Only non-empty codes are updated.
+func (r *Repository) UpdateItemBaseVariants(ctx context.Context, code, normalCode, exceptionalCode, eliteCode string) error {
+	setClauses := []string{}
+	args := []interface{}{}
+	idx := 1
+
+	if normalCode != "" {
+		setClauses = append(setClauses, fmt.Sprintf("normal_code = $%d", idx))
+		args = append(args, normalCode)
+		idx++
+	}
+	if exceptionalCode != "" {
+		setClauses = append(setClauses, fmt.Sprintf("exceptional_code = $%d", idx))
+		args = append(args, exceptionalCode)
+		idx++
+	}
+	if eliteCode != "" {
+		setClauses = append(setClauses, fmt.Sprintf("elite_code = $%d", idx))
+		args = append(args, eliteCode)
+		idx++
+	}
+
+	if len(setClauses) == 0 {
+		return nil
+	}
+
+	setClauses = append(setClauses, "updated_at = NOW()")
+	args = append(args, code)
+
+	query := fmt.Sprintf("UPDATE d2.item_bases SET %s WHERE code = $%d",
+		strings.Join(setClauses, ", "), idx)
+	_, err := r.pool.Exec(ctx, query, args...)
 	return err
+}
+
+// GetBasesForRunewordByTypeTags returns base items that match the given type tags and have enough sockets
+func (r *Repository) GetBasesForRunewordByTypeTags(ctx context.Context, typeTags []string, minSockets int) ([]ItemBaseForRuneword, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, code, name, item_type, COALESCE(item_type2, ''), category, max_sockets
+		FROM d2.item_bases
+		WHERE max_sockets >= $1
+		  AND type_tags && $2::text[]
+		  AND spawnable = true`, minSockets, typeTags)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var bases []ItemBaseForRuneword
+	for rows.Next() {
+		var ib ItemBaseForRuneword
+		if err := rows.Scan(&ib.ID, &ib.Code, &ib.Name, &ib.ItemType, &ib.ItemType2, &ib.Category, &ib.MaxSockets); err != nil {
+			return nil, err
+		}
+		bases = append(bases, ib)
+	}
+	return bases, rows.Err()
 }
 
 // Helper function to convert empty strings to nil
@@ -815,86 +934,6 @@ func (r *Repository) GetAllRunewordsForMatching(ctx context.Context) ([]Runeword
 	return runewords, rows.Err()
 }
 
-// TreasureClass operations
-
-// UpsertTreasureClass inserts or updates a treasure class
-func (r *Repository) UpsertTreasureClass(ctx context.Context, tc *TreasureClass) (int, error) {
-	var id int
-	err := r.pool.QueryRow(ctx, `
-		INSERT INTO d2.treasure_classes (name, group_id, level, picks, unique_mod, set_mod, rare_mod, magic_mod,
-			no_drop, first_ladder_season, last_ladder_season, no_always_spawn)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-		ON CONFLICT (name) DO UPDATE SET
-			group_id = EXCLUDED.group_id,
-			level = EXCLUDED.level,
-			picks = EXCLUDED.picks,
-			unique_mod = EXCLUDED.unique_mod,
-			set_mod = EXCLUDED.set_mod,
-			rare_mod = EXCLUDED.rare_mod,
-			magic_mod = EXCLUDED.magic_mod,
-			no_drop = EXCLUDED.no_drop,
-			first_ladder_season = EXCLUDED.first_ladder_season,
-			last_ladder_season = EXCLUDED.last_ladder_season,
-			no_always_spawn = EXCLUDED.no_always_spawn,
-			updated_at = NOW()
-		RETURNING id`,
-		tc.Name, tc.GroupID, tc.Level, tc.Picks, tc.UniqueMod, tc.SetMod, tc.RareMod, tc.MagicMod,
-		tc.NoDrop, tc.FirstLadderSeason, tc.LastLadderSeason, tc.NoAlwaysSpawn).Scan(&id)
-	return id, err
-}
-
-// UpsertTreasureClassItem inserts or updates a treasure class item
-func (r *Repository) UpsertTreasureClassItem(ctx context.Context, tci *TreasureClassItem) error {
-	_, err := r.pool.Exec(ctx, `
-		INSERT INTO d2.treasure_class_items (treasure_class_id, slot, item_code, is_treasure_class, probability)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (treasure_class_id, slot) DO UPDATE SET
-			item_code = EXCLUDED.item_code,
-			is_treasure_class = EXCLUDED.is_treasure_class,
-			probability = EXCLUDED.probability`,
-		tci.TreasureClassID, tci.Slot, tci.ItemCode, tci.IsTreasureClass, tci.Probability)
-	return err
-}
-
-// ItemRatio operations
-
-// UpsertItemRatio inserts or updates an item ratio
-func (r *Repository) UpsertItemRatio(ctx context.Context, ir *ItemRatio) error {
-	_, err := r.pool.Exec(ctx, `
-		INSERT INTO d2.item_ratios (function_name, version, is_uber, is_class_specific,
-			unique_ratio, unique_divisor, unique_min, rare_ratio, rare_divisor, rare_min,
-			set_ratio, set_divisor, set_min, magic_ratio, magic_divisor, magic_min,
-			hiquality_ratio, hiquality_divisor, normal_ratio, normal_divisor)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
-		ON CONFLICT (version, is_uber, is_class_specific) DO UPDATE SET
-			function_name = EXCLUDED.function_name,
-			unique_ratio = EXCLUDED.unique_ratio,
-			unique_divisor = EXCLUDED.unique_divisor,
-			unique_min = EXCLUDED.unique_min,
-			rare_ratio = EXCLUDED.rare_ratio,
-			rare_divisor = EXCLUDED.rare_divisor,
-			rare_min = EXCLUDED.rare_min,
-			set_ratio = EXCLUDED.set_ratio,
-			set_divisor = EXCLUDED.set_divisor,
-			set_min = EXCLUDED.set_min,
-			magic_ratio = EXCLUDED.magic_ratio,
-			magic_divisor = EXCLUDED.magic_divisor,
-			magic_min = EXCLUDED.magic_min,
-			hiquality_ratio = EXCLUDED.hiquality_ratio,
-			hiquality_divisor = EXCLUDED.hiquality_divisor,
-			normal_ratio = EXCLUDED.normal_ratio,
-			normal_divisor = EXCLUDED.normal_divisor,
-			updated_at = NOW()`,
-		ir.FunctionName, ir.Version, ir.IsUber, ir.IsClassSpecific,
-		ir.UniqueRatio, ir.UniqueDivisor, ir.UniqueMin,
-		ir.RareRatio, ir.RareDivisor, ir.RareMin,
-		ir.SetRatio, ir.SetDivisor, ir.SetMin,
-		ir.MagicRatio, ir.MagicDivisor, ir.MagicMin,
-		ir.HiQualityRatio, ir.HiQualityDivisor,
-		ir.NormalRatio, ir.NormalDivisor)
-	return err
-}
-
 // RuneInfo holds basic rune display info
 type RuneInfo struct {
 	ID       int
@@ -1005,26 +1044,6 @@ func (r *Repository) GetRuneNameToCodeMap(ctx context.Context) (map[string]strin
 	return result, rows.Err()
 }
 
-// GetAllExistingNames returns all names from a table column as a set for deduplication
-func (r *Repository) GetAllExistingNames(ctx context.Context, table, column string) (map[string]bool, error) {
-	// table/column are internal constants, not user input
-	query := fmt.Sprintf("SELECT %s FROM d2.%s", column, table)
-	rows, err := r.pool.Query(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	result := make(map[string]bool)
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		result[NormalizeItemName(name)] = true
-	}
-	return result, rows.Err()
-}
 
 // GetNamesWithImages returns normalized names that have a non-empty image_url
 func (r *Repository) GetNamesWithImages(ctx context.Context, table, nameColumn string) (map[string]bool, error) {
@@ -1046,26 +1065,6 @@ func (r *Repository) GetNamesWithImages(ctx context.Context, table, nameColumn s
 	return result, rows.Err()
 }
 
-// GetNameToIndexID returns a map of normalized name -> index_id for a table
-func (r *Repository) GetNameToIndexID(ctx context.Context, table, nameColumn string) (map[string]int, error) {
-	query := fmt.Sprintf("SELECT %s, index_id FROM d2.%s", nameColumn, table)
-	rows, err := r.pool.Query(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	result := make(map[string]int)
-	for rows.Next() {
-		var name string
-		var id int
-		if err := rows.Scan(&name, &id); err != nil {
-			return nil, err
-		}
-		result[NormalizeItemName(name)] = id
-	}
-	return result, rows.Err()
-}
 
 // GetMaxIndexID returns the maximum index_id from a table
 func (r *Repository) GetMaxIndexID(ctx context.Context, table string) (int, error) {
@@ -1081,9 +1080,9 @@ func (r *Repository) GetMaxIndexID(ctx context.Context, table string) (int, erro
 func (r *Repository) GetProfile(ctx context.Context, id string) (*Profile, error) {
 	var p Profile
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, email, is_admin, created_at, updated_at
+		SELECT id, is_admin, created_at, updated_at
 		FROM d2.profiles WHERE id = $1`, id).Scan(
-		&p.ID, &p.Email, &p.IsAdmin, &p.CreatedAt, &p.UpdatedAt,
+		&p.ID, &p.IsAdmin, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("get profile failed: %w", err)
@@ -1158,7 +1157,7 @@ func (r *Repository) UpsertClass(ctx context.Context, c *Class) error {
 			skill_suffix = EXCLUDED.skill_suffix,
 			skill_trees = EXCLUDED.skill_trees,
 			updated_at = NOW()`,
-		c.ID, c.Name, c.SkillSuffix, skillTreesJSON)
+		c.ID, c.Name, c.SkillSuffix, string(skillTreesJSON))
 	return err
 }
 
@@ -1224,7 +1223,7 @@ func (r *Repository) UpdateUniqueItemFields(ctx context.Context, id int, item *U
 			updated_at = NOW()
 		WHERE id = $1`,
 		id, item.Name, item.BaseCode, item.LevelReq, item.LadderOnly,
-		propsJSON, nullString(item.ImageURL))
+		string(propsJSON), nullString(item.ImageURL))
 	return err
 }
 
@@ -1240,7 +1239,7 @@ func (r *Repository) UpdateSetItemFields(ctx context.Context, id int, item *SetI
 			updated_at = NOW()
 		WHERE id = $1`,
 		id, item.Name, item.SetName, item.BaseCode, item.LevelReq,
-		propsJSON, bonusJSON, nullString(item.ImageURL))
+		string(propsJSON), string(bonusJSON), nullString(item.ImageURL))
 	return err
 }
 
@@ -1257,7 +1256,7 @@ func (r *Repository) UpdateRunewordFields(ctx context.Context, id int, item *Run
 			updated_at = NOW()
 		WHERE id = $1`,
 		id, item.Name, item.DisplayName, item.LadderOnly,
-		validTypesJSON, runesJSON, propsJSON, nullString(item.ImageURL))
+		string(validTypesJSON), string(runesJSON), string(propsJSON), nullString(item.ImageURL))
 	return err
 }
 
@@ -1274,7 +1273,7 @@ func (r *Repository) UpdateRuneFields(ctx context.Context, id int, item *Rune) e
 			updated_at = NOW()
 		WHERE id = $1`,
 		id, item.Code, item.Name, item.RuneNumber, item.LevelReq,
-		weaponJSON, helmJSON, shieldJSON, nullString(item.ImageURL))
+		string(weaponJSON), string(helmJSON), string(shieldJSON), nullString(item.ImageURL))
 	return err
 }
 
@@ -1291,7 +1290,7 @@ func (r *Repository) UpdateGemFields(ctx context.Context, id int, item *Gem) err
 			updated_at = NOW()
 		WHERE id = $1`,
 		id, item.Code, item.Name, item.GemType, item.Quality,
-		weaponJSON, helmJSON, shieldJSON, nullString(item.ImageURL))
+		string(weaponJSON), string(helmJSON), string(shieldJSON), nullString(item.ImageURL))
 	return err
 }
 

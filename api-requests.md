@@ -40,6 +40,27 @@ Base URL: `http://localhost:8080`
 
 ---
 
+## V2 Breaking Changes
+
+The following changes were introduced in the V2 HTML-only import pipeline:
+
+### Base Items (`/bases`, `/items/base/:id`)
+- **New field `tier`** (string, optional): `"Normal"`, `"Exceptional"`, or `"Elite"`
+- **New field `typeTags`** (string[], optional): Type hierarchy tags like `["Helms"]`, `["Swords", "Melee Weapons"]`
+- **New field `classSpecific`** (string, optional): Class restriction - `"amazon"`, `"paladin"`, `"sorceress"`, etc. Null for non-class items
+- **New field `iconVariants`** (string[], optional): Alternate icon URLs for items with multiple visual variants (charms, jewels)
+
+### Runewords (`/runewords`, `/items/runeword/:id`)
+- **`name` field changed**: Was `"Runeword33"` (sequential number), now `"HTMLRuneword_Enigma"` (derived from display name). Use `displayName` for user-facing display.
+- **`validTypes[].code` changed**: Was item type codes like `"tors"`, `"swor"`. Now contains human-readable names like `"Body Armor"`, `"Swords"`. Both `code` and `name` contain the same value.
+- **`runes[].name` changed**: Was full name like `"Jah Rune"`. Now short name without suffix: `"Jah"`, `"Ber"`, `"Ith"`.
+- **`runeOrder` changed**: Was `"Jah RuneIth RuneBer Rune"`. Now `"JahIthBer"` (short names concatenated).
+
+### Stats (`/stats`)
+- Stats are now dynamically discovered from imported item data and stored in `d2.stats` table. The response shape is unchanged, but the list may contain more stat codes than before as new ones are discovered during import.
+
+---
+
 ## Health Check
 
 Check if the API is running.
@@ -255,8 +276,10 @@ curl "http://localhost:8080/api/v1/d2/bases?runeword=5&category=weapon"
     "name": "Shako",
     "type": "base",
     "rarity": "normal",
-    "category": "armor",
+    "category": "Armor",
     "itemType": "Helm",
+    "tier": "Elite",
+    "typeTags": ["Helms"],
     "requirements": {
       "level": 43,
       "strength": 50,
@@ -396,18 +419,18 @@ curl "http://localhost:8080/api/v1/d2/runewords"
 [
   {
     "id": 1,
-    "name": "Runeword33",
+    "name": "HTMLRuneword_Enigma",
     "displayName": "Enigma",
-    "type": "runeword",
-    "rarity": "runeword",
+    "type": "Runeword",
+    "rarity": "Runeword",
     "runes": [
-      { "id": 31, "code": "r31", "name": "Jah Rune", "imageUrl": "https://..." },
-      { "id": 6, "code": "r06", "name": "Ith Rune", "imageUrl": "https://..." },
-      { "id": 30, "code": "r30", "name": "Ber Rune", "imageUrl": "https://..." }
+      { "id": 31, "code": "r31", "name": "Jah", "imageUrl": "https://..." },
+      { "id": 6, "code": "r06", "name": "Ith", "imageUrl": "https://..." },
+      { "id": 30, "code": "r30", "name": "Ber", "imageUrl": "https://..." }
     ],
-    "runeOrder": "Jah RuneIth RuneBer Rune",
+    "runeOrder": "JahIthBer",
     "validTypes": [
-      { "code": "tors", "name": "Body Armor" }
+      { "code": "Body Armor", "name": "Body Armor" }
     ],
     "requirements": {},
     "affixes": [
@@ -643,23 +666,23 @@ curl "http://localhost:8080/api/v1/d2/items/runeword/33"
   "itemType": "runeword",
   "runeword": {
     "id": 33,
-    "name": "Runeword33",
+    "name": "HTMLRuneword_Enigma",
     "displayName": "Enigma",
-    "type": "runeword",
-    "rarity": "runeword",
+    "type": "Runeword",
+    "rarity": "Runeword",
     "runes": [
-      { "id": 31, "code": "r31", "name": "Jah Rune", "imageUrl": "https://..." },
-      { "id": 6, "code": "r06", "name": "Ith Rune", "imageUrl": "https://..." },
-      { "id": 30, "code": "r30", "name": "Ber Rune", "imageUrl": "https://..." }
+      { "id": 31, "code": "r31", "name": "Jah", "imageUrl": "https://..." },
+      { "id": 6, "code": "r06", "name": "Ith", "imageUrl": "https://..." },
+      { "id": 30, "code": "r30", "name": "Ber", "imageUrl": "https://..." }
     ],
-    "runeOrder": "Jah RuneIth RuneBer Rune",
+    "runeOrder": "JahIthBer",
     "validTypes": [
-      { "code": "tors", "name": "Body Armor" }
+      { "code": "Body Armor", "name": "Body Armor" }
     ],
     "validBaseItems": [
-      { "id": 123, "code": "qui", "name": "Quilted Armor", "category": "armor", "maxSockets": 4 },
-      { "id": 124, "code": "lea", "name": "Leather Armor", "category": "armor", "maxSockets": 4 },
-      { "id": 125, "code": "hla", "name": "Hard Leather Armor", "category": "armor", "maxSockets": 4 }
+      { "id": 123, "code": "qui", "name": "Quilted Armor", "category": "Armor", "maxSockets": 4 },
+      { "id": 124, "code": "lea", "name": "Leather Armor", "category": "Armor", "maxSockets": 4 },
+      { "id": 125, "code": "hla", "name": "Hard Leather Armor", "category": "Armor", "maxSockets": 4 }
     ],
     "requirements": {},
     "affixes": [ ... ],
@@ -825,10 +848,12 @@ curl "http://localhost:8080/api/v1/d2/items/base/100"
     "id": 100,
     "code": "uap",
     "name": "Shako",
-    "type": "base",
-    "rarity": "normal",
-    "category": "armor",
+    "type": "Base",
+    "rarity": "Normal",
+    "category": "Armor",
     "itemType": "Helm",
+    "tier": "Elite",
+    "typeTags": ["Helms"],
     "requirements": {
       "level": 43,
       "strength": 50,
@@ -957,10 +982,10 @@ POST /api/v1/admin/d2/items/:type
 
 ```json
 {
-  "name": "Runeword123",
+  "name": "HTMLRuneword_Spirit",
   "displayName": "Spirit",
   "ladderOnly": false,
-  "validItemTypes": ["swor", "shie"],
+  "validItemTypes": ["Swords", "Shields"],
   "runes": ["r07", "r09", "r11", "r22"],
   "properties": [
     { "code": "allskills", "min": 2, "max": 2 },
@@ -1281,6 +1306,32 @@ interface QualityTiers {
 }
 ```
 
+### BaseItemDetail
+
+```typescript
+interface BaseItemDetail {
+  id: number;
+  code: string;
+  name: string;
+  type: string;                 // "Base"
+  rarity: string;               // "Normal"
+  category: string;             // "Armor", "Weapon", "Misc"
+  itemType: string;             // "Helm", "Body Armor", etc.
+  tier?: string;                // NEW: "Normal", "Exceptional", "Elite"
+  typeTags?: string[];          // NEW: ["Helms"], ["Swords", "Melee Weapons"]
+  classSpecific?: string;       // NEW: "amazon", "paladin", etc. (null for non-class items)
+  requirements: ItemRequirements;
+  defense?: DefenseRange;
+  damage?: DamageRange;
+  speed?: number;
+  maxSockets: number;
+  durability: number;
+  qualityTiers?: QualityTiers;
+  imageUrl?: string;
+  iconVariants?: string[];      // NEW: Array of alternate icon URLs
+}
+```
+
 ### RunewordBaseItem
 
 Represents a valid base item for a runeword.
@@ -1303,19 +1354,19 @@ Represents a rune in a runeword with display info.
 interface RunewordRune {
   id: number;           // Rune ID
   code: string;         // Rune code (e.g., "r31")
-  name: string;         // Rune name (e.g., "Jah Rune")
+  name: string;         // Short rune name without suffix (e.g., "Jah", "Ber")
   imageUrl?: string;    // URL to rune icon
 }
 ```
 
 ### RunewordValidType
 
-Represents a valid item type for a runeword.
+Represents a valid item type for a runeword. Both `code` and `name` now contain human-readable type names.
 
 ```typescript
 interface RunewordValidType {
-  code: string;         // Type code (e.g., "tors")
-  name: string;         // Type name (e.g., "Body Armor")
+  code: string;         // Type name (e.g., "Body Armor", "Swords")
+  name: string;         // Type name (e.g., "Body Armor", "Swords")
 }
 ```
 

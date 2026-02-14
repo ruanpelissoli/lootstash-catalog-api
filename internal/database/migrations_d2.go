@@ -263,86 +263,19 @@ CREATE TABLE IF NOT EXISTS d2.gems (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Properties (stat definitions)
-CREATE TABLE IF NOT EXISTS d2.properties (
+-- Stats (dynamic stat code registry)
+CREATE TABLE IF NOT EXISTS d2.stats (
     id SERIAL PRIMARY KEY,
-    code VARCHAR(50) UNIQUE NOT NULL,
-    enabled BOOLEAN DEFAULT TRUE,
-
-    -- Function and stat mappings
-    func1 INT,
-    stat1 VARCHAR(50),
-    func2 INT,
-    stat2 VARCHAR(50),
-    func3 INT,
-    stat3 VARCHAR(50),
-    func4 INT,
-    stat4 VARCHAR(50),
-    func5 INT,
-    stat5 VARCHAR(50),
-    func6 INT,
-    stat6 VARCHAR(50),
-    func7 INT,
-    stat7 VARCHAR(50),
-
-    -- Tooltip info
-    tooltip VARCHAR(200),
-
+    code VARCHAR(100) UNIQUE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    display_text VARCHAR(500) NOT NULL,
+    category VARCHAR(50) NOT NULL DEFAULT 'Other',
+    is_variable BOOLEAN DEFAULT TRUE,
+    is_parametric BOOLEAN DEFAULT FALSE,
+    aliases TEXT[] DEFAULT '{}',
+    sort_order INT DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Magic Affixes (prefixes and suffixes)
-CREATE TABLE IF NOT EXISTS d2.affixes (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    affix_type VARCHAR(10) NOT NULL, -- 'prefix' or 'suffix'
-
-    version INT DEFAULT 0,
-    spawnable BOOLEAN DEFAULT TRUE,
-    rare BOOLEAN DEFAULT TRUE,
-
-    level INT DEFAULT 0,
-    max_level INT,
-    level_req INT DEFAULT 0,
-
-    class_specific VARCHAR(10),
-    class_level_req INT DEFAULT 0,
-
-    frequency INT DEFAULT 0,
-    affix_group INT DEFAULT 0,
-
-    -- Modifiers
-    mod1_code VARCHAR(50),
-    mod1_param VARCHAR(50),
-    mod1_min INT,
-    mod1_max INT,
-
-    mod2_code VARCHAR(50),
-    mod2_param VARCHAR(50),
-    mod2_min INT,
-    mod2_max INT,
-
-    mod3_code VARCHAR(50),
-    mod3_param VARCHAR(50),
-    mod3_min INT,
-    mod3_max INT,
-
-    -- Valid item types
-    valid_item_types JSONB DEFAULT '[]'::jsonb,
-
-    -- Excluded item types
-    excluded_item_types JSONB DEFAULT '[]'::jsonb,
-
-    transform_color VARCHAR(10),
-
-    multiply INT DEFAULT 0,
-    add_cost INT DEFAULT 0,
-
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-
-    UNIQUE(name, affix_type)
 );
 
 -- Create indexes for common queries
@@ -352,24 +285,22 @@ CREATE INDEX IF NOT EXISTS idx_item_bases_code ON d2.item_bases(code);
 CREATE INDEX IF NOT EXISTS idx_unique_items_base_code ON d2.unique_items(base_code);
 CREATE INDEX IF NOT EXISTS idx_set_items_set_name ON d2.set_items(set_name);
 CREATE INDEX IF NOT EXISTS idx_set_items_base_code ON d2.set_items(base_code);
-CREATE INDEX IF NOT EXISTS idx_affixes_type ON d2.affixes(affix_type);
-CREATE INDEX IF NOT EXISTS idx_affixes_level ON d2.affixes(level);
-
 -- GIN indexes for JSONB property searches
 CREATE INDEX IF NOT EXISTS idx_unique_items_properties ON d2.unique_items USING GIN (properties);
 CREATE INDEX IF NOT EXISTS idx_set_items_properties ON d2.set_items USING GIN (properties);
 CREATE INDEX IF NOT EXISTS idx_runewords_properties ON d2.runewords USING GIN (properties);
-CREATE INDEX IF NOT EXISTS idx_affixes_valid_types ON d2.affixes USING GIN (valid_item_types);
+
+-- Stats indexes
+CREATE INDEX IF NOT EXISTS idx_stats_code ON d2.stats(code);
+CREATE INDEX IF NOT EXISTS idx_stats_category ON d2.stats(category);
 
 -- Profiles for auth (UUID matches Supabase auth.users.id)
 CREATE TABLE IF NOT EXISTS d2.profiles (
     id UUID PRIMARY KEY,
-    email VARCHAR(255) NOT NULL,
     is_admin BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_profiles_email ON d2.profiles(email);
 
 -- Classes with skill trees
 CREATE TABLE IF NOT EXISTS d2.classes (
@@ -386,6 +317,26 @@ ALTER TABLE d2.item_bases ADD COLUMN IF NOT EXISTS description TEXT;
 
 -- Index for quest item lookups
 CREATE INDEX IF NOT EXISTS idx_item_bases_quest ON d2.item_bases(quest_item) WHERE quest_item = true;
+
+-- V2: New columns on item_bases
+ALTER TABLE d2.item_bases ADD COLUMN IF NOT EXISTS tier VARCHAR(20) DEFAULT 'Normal';
+ALTER TABLE d2.item_bases ADD COLUMN IF NOT EXISTS type_tags TEXT[] DEFAULT '{}';
+ALTER TABLE d2.item_bases ADD COLUMN IF NOT EXISTS class_specific VARCHAR(20);
+ALTER TABLE d2.item_bases ADD COLUMN IF NOT EXISTS tradable BOOLEAN DEFAULT TRUE;
+ALTER TABLE d2.item_bases ADD COLUMN IF NOT EXISTS icon_variants TEXT[] DEFAULT '{}';
+CREATE INDEX IF NOT EXISTS idx_item_bases_tier ON d2.item_bases(tier);
+CREATE INDEX IF NOT EXISTS idx_item_bases_type_tags ON d2.item_bases USING GIN (type_tags);
+
+-- V2: UNIQUE constraints for name-based upserts
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_items_name ON d2.unique_items(name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_set_items_name ON d2.set_items(name);
+
+-- V2: Drop legacy TSV-only tables
+DROP TABLE IF EXISTS d2.treasure_class_items;
+DROP TABLE IF EXISTS d2.treasure_classes;
+DROP TABLE IF EXISTS d2.item_ratios;
+DROP TABLE IF EXISTS d2.properties;
+DROP TABLE IF EXISTS d2.affixes;
 `
 
 func (db *DB) MigrateD2(ctx context.Context) error {

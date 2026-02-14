@@ -1,6 +1,5 @@
 package d2
 
-import "sort"
 
 // StatCodeInfo contains metadata about a stat code for filtering
 type StatCodeInfo struct {
@@ -286,32 +285,3 @@ var parametricStatCodes = map[string]bool{
 	"fireskill":        true,
 }
 
-// ValidateStatCodes checks a list of property codes against the FilterableStats
-// registry and returns any codes that are missing (not registered and not parametric).
-func ValidateStatCodes(propertyCodes []string) []string {
-	// Build lookup set from FilterableStats (codes + aliases)
-	known := make(map[string]bool)
-	for _, stat := range FilterableStats() {
-		known[stat.Code] = true
-		for _, alias := range stat.Aliases {
-			known[alias] = true
-		}
-	}
-
-	// Find missing codes (deduplicated)
-	seen := make(map[string]bool)
-	var missing []string
-	for _, code := range propertyCodes {
-		if seen[code] {
-			continue
-		}
-		seen[code] = true
-		if parametricStatCodes[code] || known[code] {
-			continue
-		}
-		missing = append(missing, code)
-	}
-
-	sort.Strings(missing)
-	return missing
-}

@@ -7,7 +7,6 @@ import (
 // Profile represents a user profile for admin access
 type Profile struct {
 	ID        string    `json:"id"`
-	Email     string    `json:"email"`
 	IsAdmin   bool      `json:"is_admin"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -27,6 +26,21 @@ type Class struct {
 type SkillTree struct {
 	Name   string   `json:"name"`
 	Skills []string `json:"skills"`
+}
+
+// Stat represents a stat code in the dynamic registry
+type Stat struct {
+	ID           int       `json:"id"`
+	Code         string    `json:"code"`
+	Name         string    `json:"name"`
+	DisplayText  string    `json:"display_text"`
+	Category     string    `json:"category"`
+	IsVariable   bool      `json:"is_variable"`
+	IsParametric bool      `json:"is_parametric"`
+	Aliases      []string  `json:"aliases,omitempty"`
+	SortOrder    int       `json:"sort_order"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // Property represents a single item property/modifier
@@ -68,6 +82,10 @@ type ItemBase struct {
 	ItemType        string    `json:"item_type"`
 	ItemType2       string    `json:"item_type2,omitempty"`
 	Category        string    `json:"category"` // armor, weapon, misc
+	Tier            string    `json:"tier,omitempty"`
+	TypeTags        []string  `json:"type_tags,omitempty"`
+	ClassSpecific   string    `json:"class_specific,omitempty"`
+	Tradable        bool      `json:"tradable"`
 
 	// Requirements and stats
 	Level      int `json:"level"`
@@ -275,80 +293,6 @@ type Gem struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// ItemProperty represents a property definition
-type ItemProperty struct {
-	ID      int    `json:"id"`
-	Code    string `json:"code"`
-	Enabled bool   `json:"enabled"`
-
-	Func1 *int   `json:"func1,omitempty"`
-	Stat1 string `json:"stat1,omitempty"`
-	Func2 *int   `json:"func2,omitempty"`
-	Stat2 string `json:"stat2,omitempty"`
-	Func3 *int   `json:"func3,omitempty"`
-	Stat3 string `json:"stat3,omitempty"`
-	Func4 *int   `json:"func4,omitempty"`
-	Stat4 string `json:"stat4,omitempty"`
-	Func5 *int   `json:"func5,omitempty"`
-	Stat5 string `json:"stat5,omitempty"`
-	Func6 *int   `json:"func6,omitempty"`
-	Stat6 string `json:"stat6,omitempty"`
-	Func7 *int   `json:"func7,omitempty"`
-	Stat7 string `json:"stat7,omitempty"`
-
-	Tooltip string `json:"tooltip,omitempty"`
-
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-// Affix represents a magic prefix or suffix
-type Affix struct {
-	ID        int    `json:"id"`
-	Name      string `json:"name"`
-	AffixType string `json:"affix_type"` // prefix or suffix
-
-	Version   int  `json:"version"`
-	Spawnable bool `json:"spawnable"`
-	Rare      bool `json:"rare"`
-
-	Level     int  `json:"level"`
-	MaxLevel  *int `json:"max_level,omitempty"`
-	LevelReq  int  `json:"level_req"`
-
-	ClassSpecific string `json:"class_specific,omitempty"`
-	ClassLevelReq int    `json:"class_level_req"`
-
-	Frequency   int `json:"frequency"`
-	AffixGroup  int `json:"affix_group"`
-
-	Mod1Code  string `json:"mod1_code,omitempty"`
-	Mod1Param string `json:"mod1_param,omitempty"`
-	Mod1Min   int    `json:"mod1_min"`
-	Mod1Max   int    `json:"mod1_max"`
-
-	Mod2Code  string `json:"mod2_code,omitempty"`
-	Mod2Param string `json:"mod2_param,omitempty"`
-	Mod2Min   int    `json:"mod2_min"`
-	Mod2Max   int    `json:"mod2_max"`
-
-	Mod3Code  string `json:"mod3_code,omitempty"`
-	Mod3Param string `json:"mod3_param,omitempty"`
-	Mod3Min   int    `json:"mod3_min"`
-	Mod3Max   int    `json:"mod3_max"`
-
-	ValidItemTypes    []string `json:"valid_item_types"`
-	ExcludedItemTypes []string `json:"excluded_item_types,omitempty"`
-
-	TransformColor string `json:"transform_color,omitempty"`
-
-	Multiply int `json:"multiply"`
-	AddCost  int `json:"add_cost"`
-
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
 // RunewordBase represents a pre-computed valid base item for a runeword
 type RunewordBase struct {
 	ID              int       `json:"id"`
@@ -362,63 +306,6 @@ type RunewordBase struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
-// TreasureClass represents a drop table/loot pool
-type TreasureClass struct {
-	ID                int       `json:"id"`
-	Name              string    `json:"name"`
-	GroupID           *int      `json:"group_id,omitempty"`
-	Level             int       `json:"level"`
-	Picks             int       `json:"picks"`
-	UniqueMod         int       `json:"unique_mod"`
-	SetMod            int       `json:"set_mod"`
-	RareMod           int       `json:"rare_mod"`
-	MagicMod          int       `json:"magic_mod"`
-	NoDrop            int       `json:"no_drop"`
-	FirstLadderSeason *int      `json:"first_ladder_season,omitempty"`
-	LastLadderSeason  *int      `json:"last_ladder_season,omitempty"`
-	NoAlwaysSpawn     bool      `json:"no_always_spawn"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
-}
-
-// TreasureClassItem represents an item within a treasure class
-type TreasureClassItem struct {
-	ID              int       `json:"id"`
-	TreasureClassID int       `json:"treasure_class_id"`
-	Slot            int       `json:"slot"`
-	ItemCode        string    `json:"item_code"`
-	IsTreasureClass bool      `json:"is_treasure_class"`
-	Probability     int       `json:"probability"`
-	CreatedAt       time.Time `json:"created_at"`
-}
-
-// ItemRatio represents quality calculation ratios
-type ItemRatio struct {
-	ID               int       `json:"id"`
-	FunctionName     string    `json:"function_name"`
-	Version          int       `json:"version"`
-	IsUber           bool      `json:"is_uber"`
-	IsClassSpecific  bool      `json:"is_class_specific"`
-	UniqueRatio      int       `json:"unique_ratio"`
-	UniqueDivisor    int       `json:"unique_divisor"`
-	UniqueMin        int       `json:"unique_min"`
-	RareRatio        int       `json:"rare_ratio"`
-	RareDivisor      int       `json:"rare_divisor"`
-	RareMin          int       `json:"rare_min"`
-	SetRatio         int       `json:"set_ratio"`
-	SetDivisor       int       `json:"set_divisor"`
-	SetMin           int       `json:"set_min"`
-	MagicRatio       int       `json:"magic_ratio"`
-	MagicDivisor     int       `json:"magic_divisor"`
-	MagicMin         int       `json:"magic_min"`
-	HiQualityRatio   int       `json:"hiquality_ratio"`
-	HiQualityDivisor int       `json:"hiquality_divisor"`
-	NormalRatio      int       `json:"normal_ratio"`
-	NormalDivisor    int       `json:"normal_divisor"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-}
-
 // ImportStats tracks import statistics
 type ImportStats struct {
 	Imported int
@@ -427,18 +314,16 @@ type ImportStats struct {
 
 // ImportResult holds all import statistics
 type ImportResult struct {
-	ItemTypes        ImportStats
-	ItemBases        ImportStats
-	UniqueItems      ImportStats
-	SetBonuses       ImportStats
-	SetItems         ImportStats
-	Runewords        ImportStats
-	Runes            ImportStats
-	Gems             ImportStats
-	Properties       ImportStats
-	Affixes          ImportStats
-	RunewordBases    ImportStats
-	TreasureClasses  ImportStats
-	ItemRatios       ImportStats
-	MissingStatCodes []string
+	ItemTypes      ImportStats
+	ItemBases      ImportStats
+	UniqueItems    ImportStats
+	SetBonuses     ImportStats
+	SetItems       ImportStats
+	Runewords      ImportStats
+	Runes          ImportStats
+	Gems           ImportStats
+	RunewordBases  ImportStats
+	Stats          ImportStats
+	ImagesUploaded int
+	ImagesMissing  int
 }
