@@ -300,7 +300,7 @@ type ErrorResponse struct {
 type StatCode struct {
 	Code        string   `json:"code"`                  // Internal code for filtering (e.g., "mf", "fcr", "res-fire")
 	Name        string   `json:"name"`                  // Short display name (e.g., "Magic Find", "Faster Cast Rate")
-	Description string   `json:"description"`           // Format template (e.g., "+{value}% Better Chance Of Getting Magic Items")
+	DisplayName string   `json:"displayName"`            // Format template (e.g., "+{value}% Better Chance Of Getting Magic Items")
 	Category    string   `json:"category"`              // Category for grouping in UI (e.g., "Speed", "Resistances", "Damage")
 	Aliases     []string `json:"aliases,omitempty"`     // Alternative codes that map to this stat
 	IsVariable  bool     `json:"isVariable"`            // Whether this stat typically has variable rolls on items

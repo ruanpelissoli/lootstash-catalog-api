@@ -965,7 +965,7 @@ func (h *ItemHandler) GetAllStats(c *fiber.Ctx) error {
 			results = append(results, dto.StatCode{
 				Code:        s.Code,
 				Name:        s.Name,
-				Description: s.Description,
+				DisplayName: s.Description,
 				Category:    s.Category,
 				Aliases:     s.Aliases,
 				IsVariable:  s.IsVariable,
@@ -979,7 +979,7 @@ func (h *ItemHandler) GetAllStats(c *fiber.Ctx) error {
 		results = append(results, dto.StatCode{
 			Code:        s.Code,
 			Name:        s.Name,
-			Description: s.DisplayText,
+			DisplayName: s.DisplayText,
 			Category:    s.Category,
 			Aliases:     s.Aliases,
 			IsVariable:  s.IsVariable,
