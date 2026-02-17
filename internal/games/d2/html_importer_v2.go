@@ -66,6 +66,12 @@ func (h *HTMLImporterV2) ImportAll(ctx context.Context, catalogPath string) (*Im
 	// 2. Reload base cache after importing new bases
 	h.reloadBaseCache(ctx)
 
+	// 2b. Ensure synthetic bases exist for rings, amulets, charms, jewels
+	if err := h.ensureJewelryAndCharmBases(ctx, result); err != nil {
+		return result, err
+	}
+	h.reloadBaseCache(ctx)
+
 	// 3. Import misc (runes, gems, charms, jewels, keys) - before runewords so rune names resolve
 	if err := h.importMisc(ctx, pagesPath, result); err != nil {
 		return result, err
@@ -664,7 +670,7 @@ func (h *HTMLImporterV2) importMisc(ctx context.Context, pagesPath string, resul
 		base := &ItemBase{
 			Code:        code,
 			Name:        item.Name,
-			Category:    "misc",
+			Category:    miscCategory(item.Name),
 			Tier:        "Normal",
 			Tradable:    true,
 			Spawnable:   true,
@@ -786,6 +792,48 @@ func (h *HTMLImporterV2) computeRunewordBases(ctx context.Context, result *Impor
 	result.RunewordBases.Imported = count
 	fmt.Printf("    Runeword bases: %d computed\n", count)
 	return nil
+}
+
+// ensureJewelryAndCharmBases creates synthetic base items for item types that
+// don't appear in the HTML base catalog (rings, amulets, charms, jewels).
+func (h *HTMLImporterV2) ensureJewelryAndCharmBases(ctx context.Context, result *ImportResult) error {
+	fmt.Println("\n  Ensuring jewelry and charm base items exist...")
+
+	syntheticBases := []ItemBase{
+		{Code: "ring", Name: "Ring", Category: "ring", Tier: "Normal", InvWidth: 1, InvHeight: 1, Tradable: true, Spawnable: true, Rarity: 1},
+		{Code: "amu", Name: "Amulet", Category: "amulet", Tier: "Normal", InvWidth: 1, InvHeight: 1, Tradable: true, Spawnable: true, Rarity: 1},
+		{Code: "scha", Name: "Small Charm", Category: "charm", Tier: "Normal", InvWidth: 1, InvHeight: 1, Tradable: true, Spawnable: true, Rarity: 1},
+		{Code: "mcha", Name: "Large Charm", Category: "charm", Tier: "Normal", InvWidth: 1, InvHeight: 2, Tradable: true, Spawnable: true, Rarity: 1},
+		{Code: "lcha", Name: "Grand Charm", Category: "charm", Tier: "Normal", InvWidth: 1, InvHeight: 3, Tradable: true, Spawnable: true, Rarity: 1},
+		{Code: "jewl", Name: "Jewel", Category: "jewel", Tier: "Normal", InvWidth: 1, InvHeight: 1, Tradable: true, Spawnable: true, Rarity: 1},
+	}
+
+	created := 0
+	for _, base := range syntheticBases {
+		if !h.dryRun {
+			if err := h.repo.UpsertItemBase(ctx, &base); err != nil {
+				fmt.Printf("    ERROR: synthetic base '%s' (code=%s): %v\n", base.Name, base.Code, err)
+				continue
+			}
+		}
+		created++
+	}
+
+	fmt.Printf("    Synthetic bases: %d ensured\n", created)
+	return nil
+}
+
+// miscCategory returns the appropriate category for a misc item based on its name.
+func miscCategory(name string) string {
+	lower := strings.ToLower(name)
+	switch {
+	case strings.Contains(lower, "charm"):
+		return "charm"
+	case strings.Contains(lower, "jewel"):
+		return "jewel"
+	default:
+		return "misc"
+	}
 }
 
 // translateAndRegisterMods reverse-translates mod text lines and registers stats

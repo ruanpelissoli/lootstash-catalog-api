@@ -510,10 +510,14 @@ func (h *ItemHandler) GetAllBases(c *fiber.Ctx) error {
 	runewordIDStr := c.Query("runeword")
 
 	// Validate category if provided
-	if category != "" && category != "armor" && category != "weapon" && category != "misc" {
+	validCategories := map[string]bool{
+		"armor": true, "weapon": true, "misc": true,
+		"ring": true, "amulet": true, "charm": true, "jewel": true,
+	}
+	if category != "" && !validCategories[category] {
 		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
 			Error:   "bad_request",
-			Message: "Invalid category. Must be one of: armor, weapon, misc",
+			Message: "Invalid category. Must be one of: armor, weapon, misc, ring, amulet, charm, jewel",
 			Code:    400,
 		})
 	}

@@ -44,6 +44,9 @@ func (r *Repository) SearchItems(ctx context.Context, query string, limit int) (
 					 FROM d2.item_types it
 					 JOIN d2.item_bases ib ON ib.item_type = it.code
 					 WHERE ib.code = unique_items.base_code LIMIT 1),
+					(SELECT ib.category
+					 FROM d2.item_bases ib
+					 WHERE ib.code = unique_items.base_code LIMIT 1),
 					'Unknown'
 				) as category,
 				base_name,
@@ -62,6 +65,9 @@ func (r *Repository) SearchItems(ctx context.Context, query string, limit int) (
 					(SELECT it.name
 					 FROM d2.item_types it
 					 JOIN d2.item_bases ib ON ib.item_type = it.code
+					 WHERE ib.code = set_items.base_code LIMIT 1),
+					(SELECT ib.category
+					 FROM d2.item_bases ib
 					 WHERE ib.code = set_items.base_code LIMIT 1),
 					'Unknown'
 				) as category,

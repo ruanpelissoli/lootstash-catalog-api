@@ -37,6 +37,35 @@ func NewReverseTranslator() *ReverseTranslator {
 		}
 	}
 
+	// Legacy input patterns: HTML sources use value-last format (e.g. "All Resistances +60-70")
+	// but we now store value-first (e.g. "+60-70 All Resistances"). These patterns let the
+	// reverse translator still parse the HTML, then EnrichProperty produces the new format.
+	legacyInputFormats := map[string]string{
+		"regen-mana": "Regenerate Mana {value}%",
+		"regen":      "Replenish Life +{value}",
+		"red-dmg":    "Damage Reduced By {value}",
+		"red-dmg%":   "Damage Reduced By {value}%",
+		"red-mag":    "Magic Damage Reduced By {value}",
+		"res-fire":   "Fire Resist +{value}%",
+		"res-cold":   "Cold Resist +{value}%",
+		"res-ltng":   "Lightning Resist +{value}%",
+		"res-pois":   "Poison Resist +{value}%",
+		"res-all":    "All Resistances +{value}",
+		"res-mag":    "Magic Resist +{value}%",
+		"thorns":     "Attacker Takes Damage Of {value}",
+		"slow":       "Slows Target By {value}%",
+		"howl":       "Hit Causes Monster To Flee {value}%",
+		"stupidity":  "Hit Blinds Target +{value}",
+		"ease":       "Requirements -{value}%",
+		"cheap":      "Reduces All Vendor Prices {value}%",
+	}
+	for code, template := range legacyInputFormats {
+		rp := buildReversePattern(code, template)
+		if rp != nil {
+			patterns = append(patterns, *rp)
+		}
+	}
+
 	// Add per-level code patterns
 	for code := range perLevelCodes {
 		// Per-level display: "(X Per Character Level) Y-Z To Stat (Based On Character Level)"

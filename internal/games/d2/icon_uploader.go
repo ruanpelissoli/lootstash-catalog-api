@@ -12,19 +12,23 @@ import (
 
 // iconVariantFiles maps item base codes to their variant icon filenames
 var iconVariantFiles = map[string][]string{
-	"cm1": {"charm_small.png", "charm_small2.png", "charm_small3.png"},
-	"cm2": {"charm_medium.png", "charm_medium2.png", "charm_medium3.png"},
-	"cm3": {"charm_large.png", "charm_large2.png", "charm_large3.png"},
-	"jew": {"jewel02_graphic.png", "jewel04_graphic.png", "jewel05_graphic.png", "jewel06_graphic.png"},
+	"scha": {"charm_small.png", "charm_small2.png", "charm_small3.png"},
+	"mcha": {"charm_medium.png", "charm_medium2.png", "charm_medium3.png"},
+	"lcha": {"charm_large.png", "charm_large2.png", "charm_large3.png"},
+	"jewl": {"jewel02_graphic.png", "jewel04_graphic.png", "jewel05_graphic.png", "jewel06_graphic.png"},
+	"ring": {"ring1_graphic.png", "ring2_graphic.png", "ring3_graphic.png", "ring4_graphic.png"},
+	"amu":  {"amuletoftheviper_graphic.png", "casteramuletoftheviper_graphic.png"},
 }
 
 // fallbackIconMappings maps item base codes to fallback icon filenames
 // Used when findInHTMLMapping fails for these codes
 var fallbackIconMappings = map[string]string{
-	"cm1": "charm_small.png",
-	"cm2": "charm_medium.png",
-	"cm3": "charm_large.png",
-	"jew": "jewel02_graphic.png",
+	"scha": "charm_small.png",
+	"mcha": "charm_medium.png",
+	"lcha": "charm_large.png",
+	"jewl": "jewel02_graphic.png",
+	"ring": "ring1_graphic.png",
+	"amu":  "amuletoftheviper_graphic.png",
 	"tes": "essencesuffering_graphic.png",
 	"ceh": "essencehatred_graphic.png",
 	"bet": "essenceterror_graphic.png",

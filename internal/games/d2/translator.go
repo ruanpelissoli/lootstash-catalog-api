@@ -71,16 +71,16 @@ func NewPropertyTranslator() *PropertyTranslator {
 			"mana":       "+{value} To Mana",
 			"hp%":        "+{value}% To Life",
 			"mana%":      "+{value}% To Mana",
-			"regen-mana": "Regenerate Mana {value}%",
-			"regen":      "Replenish Life +{value}",
+			"regen-mana": "+{value}% Regenerate Mana",
+			"regen":      "+{value} Replenish Life",
 
 			// Defense
 			"ac":         "+{value} Defense",
 			"ac%":        "+{value}% Enhanced Defense",
 			"ac-miss":    "+{value} Defense vs. Missile",
-			"red-dmg":    "Damage Reduced By {value}",
-			"red-dmg%":   "Damage Reduced By {value}%",
-			"red-mag":    "Magic Damage Reduced By {value}",
+			"red-dmg":    "{value} Damage Reduced",
+			"red-dmg%":   "{value}% Damage Reduced",
+			"red-mag":    "{value} Magic Damage Reduced",
 
 			// Attack
 			"dmg%":           "+{value}% Enhanced Damage",
@@ -133,12 +133,12 @@ func NewPropertyTranslator() *PropertyTranslator {
 			"balance3":       "+{value}% Faster Hit Recovery",
 
 			// Resistances
-			"res-fire":       "Fire Resist +{value}%",
-			"res-cold":       "Cold Resist +{value}%",
-			"res-ltng":       "Lightning Resist +{value}%",
-			"res-pois":       "Poison Resist +{value}%",
-			"res-all":        "All Resistances +{value}",
-			"res-mag":        "Magic Resist +{value}%",
+			"res-fire":       "+{value}% Fire Resist",
+			"res-cold":       "+{value}% Cold Resist",
+			"res-ltng":       "+{value}% Lightning Resist",
+			"res-pois":       "+{value}% Poison Resist",
+			"res-all":        "+{value} All Resistances",
+			"res-mag":        "+{value}% Magic Resist",
 			"abs-fire":       "+{value} Fire Absorb",
 			"abs-cold":       "+{value} Cold Absorb",
 			"abs-ltng":       "+{value} Lightning Absorb",
@@ -179,14 +179,14 @@ func NewPropertyTranslator() *PropertyTranslator {
 
 			// Other
 			"light":          "+{value} To Light Radius",
-			"thorns":         "Attacker Takes Damage Of {value}",
+			"thorns":         "+{value} Attacker Takes Damage",
 			"nofreeze":       "Cannot Be Frozen",
 			"half-freeze":    "Half Freeze Duration",
 			"ignore-ac":      "Ignore Target's Defense",
 			"knock":          "Knockback",
-			"slow":           "Slows Target By {value}%",
-			"howl":           "Hit Causes Monster To Flee {value}%",
-			"stupidity":      "Hit Blinds Target +{value}",
+			"slow":           "+{value}% Slow Target",
+			"howl":           "+{value}% Hit Causes Monster To Flee",
+			"stupidity":      "+{value} Hit Blinds Target",
 			"crush":          "{value}% Chance Of Crushing Blow",
 			"deadly":         "{value}% Deadly Strike",
 			"openwounds":     "{value}% Chance Of Open Wounds",
@@ -219,7 +219,7 @@ func NewPropertyTranslator() *PropertyTranslator {
 			"exp":            "+{value}% To Experience Gained",
 
 			// Requirements
-			"ease":           "Requirements -{value}%",
+			"ease":           "-{value}% Requirements",
 
 			// Defense per time
 			"dmg-ac":         "{value}% Damage Taken Goes To Mana",
@@ -244,7 +244,7 @@ func NewPropertyTranslator() *PropertyTranslator {
 			"stamdrain": "+{value}% Slower Stamina Drain",
 
 			// Vendor
-			"cheap": "Reduces All Vendor Prices {value}%",
+			"cheap": "{value}% Reduces All Vendor Prices",
 
 			// Additional
 			"addxp": "+{value}% To Experience Gained",
@@ -424,6 +424,19 @@ func init() {
 			displayNameCache[alias] = stat.Name
 		}
 	}
+	// Parametric stats excluded from FilterableStats but still need display names
+	displayNameCache["hit-skill"] = "Chance To Cast On Striking"
+	displayNameCache["gethit-skill"] = "Chance To Cast When Struck"
+	displayNameCache["kill-skill"] = "Chance To Cast On Kill"
+	displayNameCache["death-skill"] = "Chance To Cast On Death"
+	displayNameCache["levelup-skill"] = "Chance To Cast On Level Up"
+	displayNameCache["att-skill"] = "Chance To Cast On Attack"
+	displayNameCache["charged"] = "Charges"
+	displayNameCache["skill"] = "Skill Bonus"
+	displayNameCache["oskill"] = "Skill Bonus"
+	displayNameCache["skilltab"] = "Skill Tab Bonus"
+	displayNameCache["aura"] = "Aura When Equipped"
+	displayNameCache["randclassskill"] = "Random Class Skills"
 }
 
 func (t *PropertyTranslator) GetDisplayName(code string) string {
