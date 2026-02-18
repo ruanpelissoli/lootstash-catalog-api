@@ -361,9 +361,22 @@ func parseValueStr(s string) (int, int) {
 		}
 	}
 
-	// Handle negative number with range: -5-10 (meaning -5 to -10, but displayed as value)
+	// Handle negative number or negative range: -25 or -90-70
 	if strings.HasPrefix(s, "-") {
-		// Could be just a negative number like "-25"
+		// Try to find a second dash (the range separator) after the leading negative sign
+		rest := s[1:] // strip leading "-"
+		if dashIdx := strings.Index(rest, "-"); dashIdx > 0 {
+			// Negative range: -90-70 means min=-90, max=-70
+			a, errA := strconv.Atoi(s[:1+dashIdx])      // "-90"
+			b, errB := strconv.Atoi("-" + rest[dashIdx+1:]) // "-70"
+			if errA == nil && errB == nil {
+				if a < b {
+					return a, b
+				}
+				return b, a
+			}
+		}
+		// Simple negative number: -25
 		val, err := strconv.Atoi(s)
 		if err == nil {
 			return val, val
