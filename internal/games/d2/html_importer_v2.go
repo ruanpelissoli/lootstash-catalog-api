@@ -310,11 +310,18 @@ func (h *HTMLImporterV2) importUniques(ctx context.Context, pagesPath string, re
 			}
 		}
 
-		// Reverse-translate properties and register stats
-		properties := h.reverseTranslator.ReverseTranslateLines(item.Properties)
+		// Reverse-translate properties (with OR group handling) and register stats
+		properties := h.reverseTranslateWithOrGroups(item.Properties)
 		properties = combineAllAttributes(properties, h.translator)
 		for i := range properties {
-			if properties[i].Code != "raw" {
+			if properties[i].Code == "or-group" {
+				for j := range properties[i].Alternatives {
+					if properties[i].Alternatives[j].Code != "raw" {
+						h.translator.EnrichProperty(&properties[i].Alternatives[j])
+					}
+					h.statRegistry.EnsureStat(ctx, properties[i].Alternatives[j])
+				}
+			} else if properties[i].Code != "raw" {
 				h.translator.EnrichProperty(&properties[i])
 			}
 			h.statRegistry.EnsureStat(ctx, properties[i])
@@ -1028,4 +1035,42 @@ func (h *HTMLImporterV2) findImageFileCaseInsensitive(filename string) []byte {
 		}
 	}
 	return nil
+}
+
+// reverseTranslateWithOrGroups handles OR alternative lines during reverse translation.
+// Lines containing " ||OR|| " are split into alternatives, each reverse-translated
+// independently, and combined into a single or-group Property.
+func (h *HTMLImporterV2) reverseTranslateWithOrGroups(lines []string) []Property {
+	var props []Property
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		alts := splitOrAlternatives(line)
+		if alts == nil {
+			// Normal property
+			prop := h.reverseTranslator.ReverseTranslate(line)
+			props = append(props, prop)
+			continue
+		}
+
+		// OR group: reverse-translate each alternative independently
+		var alternatives []Property
+		for _, altText := range alts {
+			alt := h.reverseTranslator.ReverseTranslate(altText)
+			alternatives = append(alternatives, alt)
+		}
+
+		// Build OR group property with clean display text
+		cleanText := strings.ReplaceAll(line, " ||OR|| ", " or ")
+		orGroup := Property{
+			Code:         "or-group",
+			DisplayText:  cleanText,
+			Alternatives: alternatives,
+		}
+		props = append(props, orGroup)
+	}
+	return props
 }

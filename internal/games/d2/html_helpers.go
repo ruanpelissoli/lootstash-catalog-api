@@ -106,6 +106,27 @@ func generateBaseCode(name string) string {
 	return code
 }
 
+// splitOrAlternatives splits a property line at ||OR|| markers into alternatives.
+// Returns nil if no OR marker is found (not an OR group).
+func splitOrAlternatives(text string) []string {
+	const marker = " ||OR|| "
+	if !strings.Contains(text, marker) {
+		return nil
+	}
+	parts := strings.Split(text, marker)
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	if len(result) < 2 {
+		return nil
+	}
+	return result
+}
+
 // splitOrBonuses splits stat text that contains "or" alternatives into separate bonus lines.
 func splitOrBonuses(text string) []string {
 	text = strings.TrimSpace(text)

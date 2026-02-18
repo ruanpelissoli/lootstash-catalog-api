@@ -19,8 +19,11 @@ type SearchResponse struct {
 
 // AffixOption represents a selectable option for an affix
 type AffixOption struct {
-	Value string `json:"value"` // Internal value (e.g., "amazon", "sorceress")
-	Label string `json:"label"` // Display label (e.g., "Amazon", "Sorceress")
+	Value    string `json:"value"`              // Internal value (e.g., "amazon", "sorceress")
+	Label    string `json:"label"`              // Display label (e.g., "Amazon", "Sorceress")
+	MinValue *int   `json:"minValue,omitempty"` // Min roll for this option (OR groups)
+	MaxValue *int   `json:"maxValue,omitempty"` // Max roll for this option (OR groups)
+	HasRange bool   `json:"hasRange"`           // Whether this option has a variable roll
 }
 
 // D2Classes contains all Diablo 2 character classes

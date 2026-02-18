@@ -919,6 +919,41 @@ func (h *ItemHandler) convertBaseToDTO(item *d2.ItemBase, itemType *d2.ItemType)
 func (h *ItemHandler) convertPropertiesToAffixes(props []d2.Property) []dto.ItemAffix {
 	affixes := make([]dto.ItemAffix, 0, len(props))
 	for _, prop := range props {
+		// Handle OR group properties
+		if prop.Code == "or-group" && len(prop.Alternatives) > 0 {
+			affix := dto.ItemAffix{
+				Name: prop.DisplayText,
+				Code: "or-group",
+			}
+
+			for _, alt := range prop.Alternatives {
+				altName := alt.DisplayText
+				if altName == "" {
+					altName = h.translator.Translate(alt)
+				}
+
+				altCode := alt.Code
+				if alt.Param != "" {
+					altCode = alt.Code + "-" + slugifyParam(alt.Param)
+				}
+
+				opt := dto.AffixOption{
+					Value: altCode,
+					Label: altName,
+				}
+				if alt.HasRange || alt.Min != alt.Max {
+					min, max := alt.Min, alt.Max
+					opt.MinValue = &min
+					opt.MaxValue = &max
+					opt.HasRange = true
+				}
+				affix.Options = append(affix.Options, opt)
+			}
+
+			affixes = append(affixes, affix)
+			continue
+		}
+
 		name := prop.DisplayText
 		hasRange := prop.HasRange
 

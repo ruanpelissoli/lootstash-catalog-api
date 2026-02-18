@@ -937,6 +937,9 @@ func (p *HTMLItemParser) cleanPropertyHTML(html string) []string {
 	// Remove HTML comments
 	html = regexp.MustCompile(`<!--.*?-->`).ReplaceAllString(html, "")
 
+	// Preserve OR markers for alternative property detection (sunder charms)
+	html = strings.ReplaceAll(html, "<strong>or</strong>", " ||OR|| ")
+
 	// Split on <br>, <br/>, <br />
 	html = regexp.MustCompile(`<br\s*/?\s*>`).ReplaceAllString(html, "\n")
 

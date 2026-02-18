@@ -45,12 +45,13 @@ type Stat struct {
 
 // Property represents a single item property/modifier
 type Property struct {
-	Code        string `json:"code"`
-	Param       string `json:"param,omitempty"`
-	Min         int    `json:"min"`
-	Max         int    `json:"max"`
-	DisplayText string `json:"displayText,omitempty"`
-	HasRange    bool   `json:"hasRange,omitempty"`
+	Code         string     `json:"code"`
+	Param        string     `json:"param,omitempty"`
+	Min          int        `json:"min"`
+	Max          int        `json:"max"`
+	DisplayText  string     `json:"displayText,omitempty"`
+	HasRange     bool       `json:"hasRange,omitempty"`
+	Alternatives []Property `json:"alternatives,omitempty"` // OR group: each alternative is a fully parsed Property
 }
 
 // ItemType represents an item type/category
