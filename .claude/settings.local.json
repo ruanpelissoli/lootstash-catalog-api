@@ -16,7 +16,8 @@
       "Bash(dir:*)",
       "Bash(del \"D:\\\\Code\\\\lootstash\\\\lootstash-catalog-api\\\\internal\\\\games\\\\d2\\\\html_importer.go\")",
       "Bash(ls:*)",
-      "Bash(powershell.exe -Command \"Remove-Item ''D:\\\\Code\\\\lootstash\\\\lootstash-catalog-api\\\\C?UsersUsuariotemp_html_importer_old.go''\")"
+      "Bash(powershell.exe -Command \"Remove-Item ''D:\\\\Code\\\\lootstash\\\\lootstash-catalog-api\\\\C?UsersUsuariotemp_html_importer_old.go''\")",
+      "Bash(go test:*)"
     ]
   }
 }
