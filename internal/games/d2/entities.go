@@ -82,7 +82,8 @@ type ItemBase struct {
 	Name            string    `json:"name"`
 	ItemType        string    `json:"item_type"`
 	ItemType2       string    `json:"item_type2,omitempty"`
-	Category        string    `json:"category"` // armor, weapon, misc
+	Category        string    `json:"category"`              // armor, weapons, jewelry, charms, runes, gems, misc
+	Subcategory     []string  `json:"subcategory,omitempty"` // e.g. ["helms"], ["swords"], ["shields"]
 	Tier            string    `json:"tier,omitempty"`
 	TypeTags        []string  `json:"type_tags,omitempty"`
 	ClassSpecific   string    `json:"class_specific,omitempty"`
@@ -157,6 +158,9 @@ type UniqueItem struct {
 	BaseCode string `json:"base_code"`
 	BaseName string `json:"base_name,omitempty"`
 
+	Category    string   `json:"category,omitempty"`
+	Subcategory []string `json:"subcategory,omitempty"`
+
 	Level    int `json:"level"`
 	LevelReq int `json:"level_req"`
 	Rarity   int `json:"rarity"`
@@ -205,6 +209,9 @@ type SetItem struct {
 	BaseCode string `json:"base_code"`
 	BaseName string `json:"base_name,omitempty"`
 
+	Category    string   `json:"category,omitempty"`
+	Subcategory []string `json:"subcategory,omitempty"`
+
 	Level    int `json:"level"`
 	LevelReq int `json:"level_req"`
 	Rarity   int `json:"rarity"`
@@ -232,6 +239,9 @@ type Runeword struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
 
+	Category    string   `json:"category,omitempty"`
+	Subcategory []string `json:"subcategory,omitempty"`
+
 	Complete          bool `json:"complete"`
 	LadderOnly        bool `json:"ladder_only"`
 	FirstLadderSeason *int `json:"first_ladder_season,omitempty"`
@@ -240,8 +250,9 @@ type Runeword struct {
 	ValidItemTypes    []string `json:"valid_item_types"`
 	ExcludedItemTypes []string `json:"excluded_item_types,omitempty"`
 
-	Runes      []string   `json:"runes"`
-	Properties []Property `json:"properties"`
+	Runes            []string              `json:"runes"`
+	Properties       []Property            `json:"properties"`
+	PropertiesByType map[string][]Property `json:"properties_by_type,omitempty"`
 
 	ImageURL string `json:"image_url,omitempty"`
 

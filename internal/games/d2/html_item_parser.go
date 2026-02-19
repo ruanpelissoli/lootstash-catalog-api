@@ -112,12 +112,13 @@ type HTMLParsedMiscItem struct {
 
 // HTMLParsedRuneword represents a runeword extracted from HTML
 type HTMLParsedRuneword struct {
-	Name        string
-	Runes       []string
-	SocketCount int
-	ReqLevel    int
-	ValidTypes  []string
-	Properties  []string // Raw property text lines
+	Name             string
+	Runes            []string
+	SocketCount      int
+	ReqLevel         int
+	ValidTypes       []string
+	Properties       []string            // Raw property text lines (used when all types share the same stats)
+	PropertiesByType map[string][]string // TypeName -> properties (used when stats differ per base type)
 }
 
 // HTMLItemParser parses detailed item data from diablo2.io HTML files
@@ -516,15 +517,76 @@ func (p *HTMLItemParser) parseRunewordArticle(s *goquery.Selection) HTMLParsedRu
 		}
 	})
 
-	// Extract properties from span.z-smallstats inside the runeword details section
-	// The runeword properties are in the z-vf-hide div after the runes
-	s.Find("div.z-vf-hide span.z-smallstats").Each(func(i int, span *goquery.Selection) {
-		html, _ := span.Html()
-		lines := p.cleanPropertyHTML(html)
-		if len(lines) > 0 {
-			rw.Properties = append(rw.Properties, lines...)
+	// Extract properties per base type from the div.z-vf-hide that contains the filter links.
+	// The HTML structure pairs each <a href="#filter=..."> with the next <span class="z-smallstats">.
+	// This follows the same sequential child iteration pattern as parseMiscModSections.
+	var propsDiv *goquery.Selection
+	s.Find("div.z-vf-hide").Each(func(i int, div *goquery.Selection) {
+		if propsDiv != nil {
+			return
+		}
+		if div.Find(`a[href*="#filter="]`).Length() > 0 {
+			propsDiv = div
 		}
 	})
+
+	if propsDiv != nil {
+		perType := make(map[string][]string)
+		var typeOrder []string
+		currentType := ""
+
+		propsDiv.Children().Each(func(i int, child *goquery.Selection) {
+			nodeName := goquery.NodeName(child)
+
+			// Detect type header links
+			if nodeName == "a" {
+				href, exists := child.Attr("href")
+				if exists && strings.Contains(href, "#filter=") {
+					typeName := strings.TrimSpace(child.Text())
+					typeName = strings.Join(strings.Fields(typeName), " ")
+					if typeName != "" {
+						currentType = typeName
+						if _, seen := perType[currentType]; !seen {
+							typeOrder = append(typeOrder, currentType)
+							perType[currentType] = nil
+						}
+					}
+				}
+				return
+			}
+
+			// Collect properties from span.z-smallstats
+			if nodeName == "span" && child.HasClass("z-smallstats") && currentType != "" {
+				html, _ := child.Html()
+				lines := p.cleanPropertyHTML(html)
+				if len(lines) > 0 {
+					perType[currentType] = append(perType[currentType], lines...)
+				}
+			}
+		})
+
+		// Determine if all types share the same properties
+		allSame := len(typeOrder) > 1
+		if allSame {
+			first := perType[typeOrder[0]]
+			for _, tn := range typeOrder[1:] {
+				if !stringSlicesEqual(first, perType[tn]) {
+					allSame = false
+					break
+				}
+			}
+		}
+
+		if len(typeOrder) <= 1 || allSame {
+			// Single type or all identical — use flat Properties
+			for _, tn := range typeOrder {
+				rw.Properties = append(rw.Properties, perType[tn]...)
+			}
+		} else {
+			// Different stats per type
+			rw.PropertiesByType = perType
+		}
+	}
 
 	return rw
 }
@@ -867,6 +929,18 @@ func (p *HTMLItemParser) extractPropertiesFromStats(stats *goquery.Selection) []
 
 	html, _ := stats.Html()
 	return p.cleanPropertyHTML(html)
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // cleanPropertyHTML converts HTML property text to clean text lines

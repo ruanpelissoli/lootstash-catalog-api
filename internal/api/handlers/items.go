@@ -90,12 +90,13 @@ func (h *ItemHandler) Search(c *fiber.Ctx) error {
 			baseName = ""
 		}
 		items = append(items, dto.ItemSearchResult{
-			ID:       strconv.Itoa(r.ID),
-			Name:     r.Name,
-			Type:     capitalize(r.Type),
-			Category: category,
-			ImageURL: r.ImageURL,
-			BaseName: baseName,
+			ID:          strconv.Itoa(r.ID),
+			Name:        r.Name,
+			Type:        capitalize(r.Type),
+			Category:    category,
+			Subcategory: r.Subcategory,
+			ImageURL:    r.ImageURL,
+			BaseName:    baseName,
 		})
 	}
 
@@ -511,13 +512,13 @@ func (h *ItemHandler) GetAllBases(c *fiber.Ctx) error {
 
 	// Validate category if provided
 	validCategories := map[string]bool{
-		"armor": true, "weapon": true, "misc": true,
-		"ring": true, "amulet": true, "charm": true, "jewel": true,
+		"armor": true, "weapons": true, "jewelry": true,
+		"charms": true, "runes": true, "gems": true, "misc": true,
 	}
 	if category != "" && !validCategories[category] {
 		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
 			Error:   "bad_request",
-			Message: "Invalid category. Must be one of: armor, weapon, misc, ring, amulet, charm, jewel",
+			Message: "Invalid category. Must be one of: armor, weapons, jewelry, charms, runes, gems, misc",
 			Code:    400,
 		})
 	}
@@ -658,10 +659,12 @@ func (h *ItemHandler) GetAllRunewords(c *fiber.Ctx) error {
 
 func (h *ItemHandler) convertUniqueToDTO(item *d2.UniqueItem, base *d2.ItemBase) *dto.UniqueItemDetail {
 	detail := &dto.UniqueItemDetail{
-		ID:     item.ID,
-		Name:   item.Name,
-		Type:   "Unique",
-		Rarity: "Unique",
+		ID:          item.ID,
+		Name:        item.Name,
+		Type:        "Unique",
+		Rarity:      "Unique",
+		Category:    capitalize(item.Category),
+		Subcategory: item.Subcategory,
 		Requirements: dto.ItemRequirements{
 			Level: item.LevelReq,
 		},
@@ -672,10 +675,11 @@ func (h *ItemHandler) convertUniqueToDTO(item *d2.UniqueItem, base *d2.ItemBase)
 	// Add base info if available
 	if base != nil {
 		detail.Base = dto.ItemBaseInfo{
-			Code:     base.Code,
-			Name:     base.Name,
-			Category: capitalize(base.Category),
-			ItemType: h.resolveItemTypeName(base.ItemType),
+			Code:        base.Code,
+			Name:        base.Name,
+			Category:    capitalize(base.Category),
+			Subcategory: base.Subcategory,
+			ItemType:    h.resolveItemTypeName(base.ItemType),
 		}
 		if base.MaxAC > 0 {
 			detail.Base.Defense = &dto.DefenseRange{
@@ -705,11 +709,13 @@ func (h *ItemHandler) convertUniqueToDTO(item *d2.UniqueItem, base *d2.ItemBase)
 
 func (h *ItemHandler) convertSetItemToDTO(item *d2.SetItem, base *d2.ItemBase) *dto.SetItemDetail {
 	detail := &dto.SetItemDetail{
-		ID:      item.ID,
-		Name:    item.Name,
-		SetName: item.SetName,
-		Type:    "Set",
-		Rarity:  "Set",
+		ID:          item.ID,
+		Name:        item.Name,
+		SetName:     item.SetName,
+		Type:        "Set",
+		Rarity:      "Set",
+		Category:    capitalize(item.Category),
+		Subcategory: item.Subcategory,
 		Requirements: dto.ItemRequirements{
 			Level: item.LevelReq,
 		},
@@ -719,10 +725,11 @@ func (h *ItemHandler) convertSetItemToDTO(item *d2.SetItem, base *d2.ItemBase) *
 	// Add base info if available
 	if base != nil {
 		detail.Base = dto.ItemBaseInfo{
-			Code:     base.Code,
-			Name:     base.Name,
-			Category: capitalize(base.Category),
-			ItemType: h.resolveItemTypeName(base.ItemType),
+			Code:        base.Code,
+			Name:        base.Name,
+			Category:    capitalize(base.Category),
+			Subcategory: base.Subcategory,
+			ItemType:    h.resolveItemTypeName(base.ItemType),
 		}
 		if base.MaxAC > 0 {
 			detail.Base.Defense = &dto.DefenseRange{
@@ -758,6 +765,8 @@ func (h *ItemHandler) convertRunewordToDTO(item *d2.Runeword, bases []d2.Runewor
 		DisplayName: item.DisplayName,
 		Type:        "Runeword",
 		Rarity:      "Runeword",
+		Category:    capitalize(item.Category),
+		Subcategory: item.Subcategory,
 		LadderOnly:  item.LadderOnly,
 		ImageURL:    item.ImageURL,
 	}
@@ -792,7 +801,20 @@ func (h *ItemHandler) convertRunewordToDTO(item *d2.Runeword, bases []d2.Runewor
 	}
 
 	// Convert properties
-	detail.Affixes = h.convertPropertiesToAffixes(item.Properties)
+	if len(item.PropertiesByType) > 0 {
+		detail.AffixesByType = make(map[string][]dto.ItemAffix)
+		for typeName, props := range item.PropertiesByType {
+			detail.AffixesByType[typeName] = h.convertPropertiesToAffixes(props)
+		}
+		// Populate flat Affixes with first valid type's stats for backward compatibility
+		if len(item.ValidItemTypes) > 0 {
+			if props, ok := item.PropertiesByType[item.ValidItemTypes[0]]; ok {
+				detail.Affixes = h.convertPropertiesToAffixes(props)
+			}
+		}
+	} else {
+		detail.Affixes = h.convertPropertiesToAffixes(item.Properties)
+	}
 
 	// Add valid base items
 	if len(bases) > 0 {
@@ -855,12 +877,13 @@ func (h *ItemHandler) convertGemToDTO(item *d2.Gem) *dto.GemDetail {
 
 func (h *ItemHandler) convertBaseToDTO(item *d2.ItemBase, itemType *d2.ItemType) *dto.BaseItemDetail {
 	detail := &dto.BaseItemDetail{
-		ID:       item.ID,
-		Code:     item.Code,
-		Name:     item.Name,
-		Type:     "Base",
-		Rarity:   "Normal",
-		Category: capitalize(item.Category),
+		ID:          item.ID,
+		Code:        item.Code,
+		Name:        item.Name,
+		Type:        "Base",
+		Rarity:      "Normal",
+		Category:    capitalize(item.Category),
+		Subcategory: item.Subcategory,
 		Tier:          item.Tier,
 		TypeTags:      item.TypeTags,
 		ClassSpecific: item.ClassSpecific,
@@ -1035,10 +1058,18 @@ func (h *ItemHandler) GetAllCategories(c *fiber.Ctx) error {
 
 	results := make([]dto.Category, 0, len(categories))
 	for _, cat := range categories {
+		subcats := make([]dto.SubcategoryDTO, 0, len(cat.Subcategories))
+		for _, sc := range cat.Subcategories {
+			subcats = append(subcats, dto.SubcategoryDTO{
+				Code: sc.Code,
+				Name: sc.Name,
+			})
+		}
 		results = append(results, dto.Category{
-			Code:        cat.Code,
-			Name:        cat.Name,
-			Description: cat.Description,
+			Code:          cat.Code,
+			Name:          cat.Name,
+			Description:   cat.Description,
+			Subcategories: subcats,
 		})
 	}
 

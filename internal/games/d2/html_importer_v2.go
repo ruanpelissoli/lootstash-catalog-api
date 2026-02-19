@@ -197,12 +197,22 @@ func (h *HTMLImporterV2) importBases(ctx context.Context, pagesPath string, resu
 		}
 		usedCodes[code] = true
 
-		// Determine category
-		category := "misc"
-		if item.DefenseMax > 0 {
-			category = "armor"
-		} else if item.OneHMaxDam > 0 || item.TwoHMaxDam > 0 {
-			category = "weapon"
+		// Determine category and subcategory from type tags
+		pair := ResolveCategoryFromTypeTags(item.TypeTags)
+		category := pair.Category
+		subcategory := pair.Subcategory
+		// Fallback if type_tags didn't resolve
+		if category == "misc" && subcategory == "" {
+			if item.DefenseMax > 0 {
+				category = "armor"
+			} else if item.OneHMaxDam > 0 || item.TwoHMaxDam > 0 {
+				category = "weapons"
+			}
+		}
+
+		var subcategoryArr []string
+		if subcategory != "" {
+			subcategoryArr = []string{subcategory}
 		}
 
 		// Map type names to codes
@@ -246,6 +256,7 @@ func (h *HTMLImporterV2) importBases(ctx context.Context, pagesPath string, resu
 			ItemType:      itemType,
 			ItemType2:     itemType2,
 			Category:      category,
+			Subcategory:   subcategoryArr,
 			Tier:          item.Quality,
 			TypeTags:      item.TypeTags,
 			ClassSpecific: classSpecific,
@@ -294,6 +305,9 @@ func (h *HTMLImporterV2) importUniques(ctx context.Context, pagesPath string, re
 	}
 	fmt.Printf("    Found %d unique items\n", len(items))
 
+	// Load base code → category map for inheriting categories
+	baseCatMap, _ := h.repo.GetBaseCodeToCategoryMap(ctx)
+
 	// Get next index ID for items that don't exist yet
 	maxID, _ := h.repo.GetMaxIndexID(ctx, "unique_items")
 	nextID := maxID + 1
@@ -307,6 +321,18 @@ func (h *HTMLImporterV2) importUniques(ctx context.Context, pagesPath string, re
 				baseCode = code
 			} else {
 				fmt.Printf("    Warning: unique '%s' has unresolved base '%s'\n", item.Name, item.BaseName)
+			}
+		}
+
+		// Inherit category/subcategory from base
+		var itemCategory string
+		var itemSubcategory []string
+		if baseCode != "" {
+			if cp, ok := baseCatMap[baseCode]; ok {
+				itemCategory = cp.Category
+				if cp.Subcategory != "" {
+					itemSubcategory = []string{cp.Subcategory}
+				}
 			}
 		}
 
@@ -330,16 +356,18 @@ func (h *HTMLImporterV2) importUniques(ctx context.Context, pagesPath string, re
 		imageURL := h.maybeUploadImage(ctx, item.ImagePath, "d2/unique", item.Name, result)
 
 		unique := &UniqueItem{
-			IndexID:    nextID,
-			Name:       item.Name,
-			BaseCode:   baseCode,
-			BaseName:   item.BaseName,
-			Level:      item.QualityLevel,
-			LevelReq:   item.ReqLevel,
-			Rarity:     1,
-			Enabled:    true,
-			Properties: properties,
-			ImageURL:   imageURL,
+			IndexID:     nextID,
+			Name:        item.Name,
+			BaseCode:    baseCode,
+			BaseName:    item.BaseName,
+			Category:    itemCategory,
+			Subcategory: itemSubcategory,
+			Level:       item.QualityLevel,
+			LevelReq:    item.ReqLevel,
+			Rarity:      1,
+			Enabled:     true,
+			Properties:  properties,
+			ImageURL:    imageURL,
 		}
 		nextID++
 
@@ -421,6 +449,9 @@ func (h *HTMLImporterV2) importSets(ctx context.Context, pagesPath string, resul
 		result.SetBonuses.Imported++
 	}
 
+	// Load base code → category map for inheriting categories
+	baseCatMap, _ := h.repo.GetBaseCodeToCategoryMap(ctx)
+
 	// Second pass: upsert set items
 	maxItemID, _ := h.repo.GetMaxIndexID(ctx, "set_items")
 	nextItemID := maxItemID + 1
@@ -433,6 +464,18 @@ func (h *HTMLImporterV2) importSets(ctx context.Context, pagesPath string, resul
 				baseCode = code
 			} else {
 				fmt.Printf("    Warning: set item '%s' has unresolved base '%s'\n", item.Name, item.BaseName)
+			}
+		}
+
+		// Inherit category/subcategory from base
+		var setCategory string
+		var setSubcategory []string
+		if baseCode != "" {
+			if cp, ok := baseCatMap[baseCode]; ok {
+				setCategory = cp.Category
+				if cp.Subcategory != "" {
+					setSubcategory = []string{cp.Subcategory}
+				}
 			}
 		}
 
@@ -469,6 +512,8 @@ func (h *HTMLImporterV2) importSets(ctx context.Context, pagesPath string, resul
 			SetName:         item.SetName,
 			BaseCode:        baseCode,
 			BaseName:        item.BaseName,
+			Category:        setCategory,
+			Subcategory:     setSubcategory,
 			Level:           item.QualityLevel,
 			LevelReq:        item.ReqLevel,
 			Rarity:          1,
@@ -522,25 +567,47 @@ func (h *HTMLImporterV2) importRunewords(ctx context.Context, pagesPath string, 
 		// Store valid types as tag names (not codes) for type_tags matching
 		validTypes := rw.ValidTypes
 
-		// Reverse-translate properties
-		properties := h.reverseTranslator.ReverseTranslateLines(rw.Properties)
-		properties = combineAllAttributes(properties, h.translator)
-		for i := range properties {
-			if properties[i].Code != "raw" {
-				h.translator.EnrichProperty(&properties[i])
-			}
-			h.statRegistry.EnsureStat(ctx, properties[i])
-		}
+		// Derive category/subcategory from valid types
+		rwCategory, rwSubcategory := RunewordCategoriesFromValidTypes(validTypes)
 
 		internalName := fmt.Sprintf("HTMLRuneword_%s", strings.ReplaceAll(rw.Name, " ", ""))
 
 		runeword := &Runeword{
 			Name:           internalName,
 			DisplayName:    rw.Name,
+			Category:       rwCategory,
+			Subcategory:    rwSubcategory,
 			Complete:       true,
 			ValidItemTypes: validTypes,
 			Runes:          runeCodes,
-			Properties:     properties,
+		}
+
+		if len(rw.PropertiesByType) > 0 {
+			// Per-type properties: reverse-translate and enrich each type independently
+			propsByType := make(map[string][]Property)
+			for typeName, lines := range rw.PropertiesByType {
+				props := h.reverseTranslator.ReverseTranslateLines(lines)
+				props = combineAllAttributes(props, h.translator)
+				for i := range props {
+					if props[i].Code != "raw" {
+						h.translator.EnrichProperty(&props[i])
+					}
+					h.statRegistry.EnsureStat(ctx, props[i])
+				}
+				propsByType[typeName] = props
+			}
+			runeword.PropertiesByType = propsByType
+		} else {
+			// Same stats for all types (existing logic)
+			properties := h.reverseTranslator.ReverseTranslateLines(rw.Properties)
+			properties = combineAllAttributes(properties, h.translator)
+			for i := range properties {
+				if properties[i].Code != "raw" {
+					h.translator.EnrichProperty(&properties[i])
+				}
+				h.statRegistry.EnsureStat(ctx, properties[i])
+			}
+			runeword.Properties = properties
 		}
 
 		if !h.dryRun {
@@ -674,10 +741,17 @@ func (h *HTMLImporterV2) importMisc(ctx context.Context, pagesPath string, resul
 
 		imageURL := h.maybeUploadImage(ctx, item.ImagePath, "d2/misc", item.Name, result)
 
+		miscPair := miscCategoryPair(item.Name)
+		var miscSubcatArr []string
+		if miscPair.Subcategory != "" {
+			miscSubcatArr = []string{miscPair.Subcategory}
+		}
+
 		base := &ItemBase{
 			Code:        code,
 			Name:        item.Name,
-			Category:    miscCategory(item.Name),
+			Category:    miscPair.Category,
+			Subcategory: miscSubcatArr,
 			Tier:        "Normal",
 			Tradable:    true,
 			Spawnable:   true,
@@ -807,12 +881,12 @@ func (h *HTMLImporterV2) ensureJewelryAndCharmBases(ctx context.Context, result 
 	fmt.Println("\n  Ensuring jewelry and charm base items exist...")
 
 	syntheticBases := []ItemBase{
-		{Code: "ring", Name: "Ring", Category: "ring", Tier: "Normal", InvWidth: 1, InvHeight: 1, Tradable: true, Spawnable: true, Rarity: 1},
-		{Code: "amu", Name: "Amulet", Category: "amulet", Tier: "Normal", InvWidth: 1, InvHeight: 1, Tradable: true, Spawnable: true, Rarity: 1},
-		{Code: "scha", Name: "Small Charm", Category: "charm", Tier: "Normal", InvWidth: 1, InvHeight: 1, Tradable: true, Spawnable: true, Rarity: 1},
-		{Code: "mcha", Name: "Large Charm", Category: "charm", Tier: "Normal", InvWidth: 1, InvHeight: 2, Tradable: true, Spawnable: true, Rarity: 1},
-		{Code: "lcha", Name: "Grand Charm", Category: "charm", Tier: "Normal", InvWidth: 1, InvHeight: 3, Tradable: true, Spawnable: true, Rarity: 1},
-		{Code: "jewl", Name: "Jewel", Category: "jewel", Tier: "Normal", InvWidth: 1, InvHeight: 1, Tradable: true, Spawnable: true, Rarity: 1},
+		{Code: "ring", Name: "Ring", Category: "jewelry", Subcategory: []string{"rings"}, Tier: "Normal", InvWidth: 1, InvHeight: 1, Tradable: true, Spawnable: true, Rarity: 1},
+		{Code: "amu", Name: "Amulet", Category: "jewelry", Subcategory: []string{"amulets"}, Tier: "Normal", InvWidth: 1, InvHeight: 1, Tradable: true, Spawnable: true, Rarity: 1},
+		{Code: "scha", Name: "Small Charm", Category: "charms", Subcategory: []string{"small charm"}, Tier: "Normal", InvWidth: 1, InvHeight: 1, Tradable: true, Spawnable: true, Rarity: 1},
+		{Code: "mcha", Name: "Large Charm", Category: "charms", Subcategory: []string{"large charm"}, Tier: "Normal", InvWidth: 1, InvHeight: 2, Tradable: true, Spawnable: true, Rarity: 1},
+		{Code: "lcha", Name: "Grand Charm", Category: "charms", Subcategory: []string{"grand charm"}, Tier: "Normal", InvWidth: 1, InvHeight: 3, Tradable: true, Spawnable: true, Rarity: 1},
+		{Code: "jewl", Name: "Jewel", Category: "jewelry", Subcategory: []string{"jewels"}, Tier: "Normal", InvWidth: 1, InvHeight: 1, Tradable: true, Spawnable: true, Rarity: 1},
 	}
 
 	created := 0
@@ -830,17 +904,10 @@ func (h *HTMLImporterV2) ensureJewelryAndCharmBases(ctx context.Context, result 
 	return nil
 }
 
-// miscCategory returns the appropriate category for a misc item based on its name.
+// miscCategory is kept for backward compatibility. Use miscCategoryPair instead.
+// Deprecated: use miscCategoryPair from item_categories.go
 func miscCategory(name string) string {
-	lower := strings.ToLower(name)
-	switch {
-	case strings.Contains(lower, "charm"):
-		return "charm"
-	case strings.Contains(lower, "jewel"):
-		return "jewel"
-	default:
-		return "misc"
-	}
+	return miscCategoryPair(name).Category
 }
 
 // translateAndRegisterMods reverse-translates mod text lines and registers stats

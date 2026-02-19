@@ -8,13 +8,13 @@ import (
 func TestCategories(t *testing.T) {
 	cats := Categories()
 
-	if len(cats) != 14 {
-		t.Errorf("expected 14 categories, got %d", len(cats))
+	if len(cats) != 7 {
+		t.Errorf("expected 7 categories, got %d", len(cats))
 	}
 
 	// Verify first and last entries
-	if cats[0].Code != "helm" || cats[0].Name != "Helms" {
-		t.Errorf("first category: got {%s, %s}, want {helm, Helms}", cats[0].Code, cats[0].Name)
+	if cats[0].Code != "armor" || cats[0].Name != "Armor" {
+		t.Errorf("first category: got {%s, %s}, want {armor, Armor}", cats[0].Code, cats[0].Name)
 	}
 	if cats[len(cats)-1].Code != "misc" || cats[len(cats)-1].Name != "Miscellaneous" {
 		t.Errorf("last category: got {%s, %s}, want {misc, Miscellaneous}", cats[len(cats)-1].Code, cats[len(cats)-1].Name)
@@ -33,6 +33,41 @@ func TestCategories(t *testing.T) {
 			t.Errorf("duplicate category code: %s", c.Code)
 		}
 		seen[c.Code] = true
+	}
+
+	// Verify armor has subcategories
+	armor := cats[0]
+	if len(armor.Subcategories) != 8 {
+		t.Errorf("expected 8 armor subcategories, got %d", len(armor.Subcategories))
+	}
+	if armor.Subcategories[0].Code != "helms" {
+		t.Errorf("first armor subcategory: got %s, want helms", armor.Subcategories[0].Code)
+	}
+
+	// Verify weapons has subcategories including shields
+	weapons := cats[1]
+	if weapons.Code != "weapons" {
+		t.Errorf("second category: got %s, want weapons", weapons.Code)
+	}
+	hasShields := false
+	for _, sc := range weapons.Subcategories {
+		if sc.Code == "shields" {
+			hasShields = true
+			break
+		}
+	}
+	if !hasShields {
+		t.Error("weapons category missing shields subcategory")
+	}
+
+	// Verify runes and gems have no subcategories
+	for _, c := range cats {
+		if c.Code == "runes" && len(c.Subcategories) > 0 {
+			t.Error("runes should have no subcategories")
+		}
+		if c.Code == "gems" && len(c.Subcategories) > 0 {
+			t.Error("gems should have no subcategories")
+		}
 	}
 }
 

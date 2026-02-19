@@ -1,6 +1,7 @@
 package d2
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -127,6 +128,95 @@ func TestExtractSlugFromHref(t *testing.T) {
 				t.Errorf("extractSlugFromHref(%q) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestParseRunewordPropertiesByType(t *testing.T) {
+	parser := NewHTMLItemParser()
+	runewords, err := parser.ParseRunewordsFile("../../../catalogs/d2/pages/runewords.html")
+	if err != nil {
+		t.Fatalf("ParseRunewordsFile failed: %v", err)
+	}
+
+	// Find Spirit
+	var spirit *HTMLParsedRuneword
+	for i := range runewords {
+		if runewords[i].Name == "Spirit" {
+			spirit = &runewords[i]
+			break
+		}
+	}
+	if spirit == nil {
+		t.Fatal("Spirit runeword not found")
+	}
+
+	// Spirit should have per-type properties (Swords vs Shields have different stats)
+	if spirit.PropertiesByType == nil {
+		t.Fatal("Spirit should have PropertiesByType set (Swords and Shields have different stats)")
+	}
+	if len(spirit.Properties) > 0 {
+		t.Error("Spirit.Properties should be empty when PropertiesByType is set")
+	}
+
+	// Should have exactly 2 types
+	if len(spirit.PropertiesByType) != 2 {
+		t.Fatalf("Spirit should have 2 type entries, got %d", len(spirit.PropertiesByType))
+	}
+
+	swordProps, hasSwords := spirit.PropertiesByType["4 socket Swords"]
+	shieldProps, hasShields := spirit.PropertiesByType["4 socket Shields"]
+	if !hasSwords {
+		t.Error("Spirit should have '4 socket Swords' in PropertiesByType")
+	}
+	if !hasShields {
+		t.Error("Spirit should have '4 socket Shields' in PropertiesByType")
+	}
+
+	// Sword and shield properties should differ
+	if stringSlicesEqual(swordProps, shieldProps) {
+		t.Error("Spirit Swords and Shields properties should be different")
+	}
+
+	// Swords should have Lightning Damage, Shields should not
+	hasLightningDmg := false
+	for _, line := range swordProps {
+		if strings.Contains(line, "Lightning Damage") {
+			hasLightningDmg = true
+			break
+		}
+	}
+	if !hasLightningDmg {
+		t.Error("Spirit Swords should have Lightning Damage property")
+	}
+
+	// Shields should have Cold Resist, Swords should not
+	hasColdResist := false
+	for _, line := range shieldProps {
+		if strings.Contains(line, "Cold Resist") {
+			hasColdResist = true
+			break
+		}
+	}
+	if !hasColdResist {
+		t.Error("Spirit Shields should have Cold Resist property")
+	}
+
+	// Find a runeword with same stats for all types (e.g., Rhyme - 2 socket Shields only)
+	var rhyme *HTMLParsedRuneword
+	for i := range runewords {
+		if runewords[i].Name == "Rhyme" {
+			rhyme = &runewords[i]
+			break
+		}
+	}
+	if rhyme != nil {
+		// Single type runewords should use flat Properties, not PropertiesByType
+		if rhyme.PropertiesByType != nil {
+			t.Error("Rhyme should not have PropertiesByType (single base type)")
+		}
+		if len(rhyme.Properties) == 0 {
+			t.Error("Rhyme should have Properties set")
+		}
 	}
 }
 

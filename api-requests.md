@@ -61,6 +61,83 @@ The following changes were introduced in the V2 HTML-only import pipeline:
 
 ---
 
+## V3 Breaking Changes
+
+The V3 update introduces a complete category/subcategory rework. Every item now has a proper `category` and `subcategory` computed at import time, replacing the old coarse categorization.
+
+### Category Values Changed (all endpoints)
+
+Old category values: `"armor"`, `"weapon"`, `"misc"`, `"ring"`, `"amulet"`, `"charm"`, `"jewel"`, `"rune"`, `"gem"`
+
+New category values (7 top-level categories, plural naming):
+| Category    | Description |
+|-------------|-------------|
+| `"armor"`   | Helms, body armor, gloves, boots, belts |
+| `"weapons"` | All weapons + shields (shields are weapons now) |
+| `"jewelry"` | Rings, amulets, jewels |
+| `"charms"`  | Small, large, grand charms |
+| `"runes"`   | All runes |
+| `"gems"`    | All gems |
+| `"misc"`    | Keys, essences, tokens, quest items |
+
+**Migration note:** `"weapon"` → `"weapons"`, `"ring"`/`"amulet"`/`"jewel"` → `"jewelry"`, `"charm"` → `"charms"`, `"rune"` → `"runes"`, `"gem"` → `"gems"`. Update any hardcoded category checks.
+
+### New `subcategory` Field (all item types)
+
+**All item responses** now include a `subcategory` field (string array, omitted if empty):
+- Search results: `"subcategory": ["helms"]`
+- Unique items: `"subcategory": ["swords"]`
+- Set items: `"subcategory": ["body armor"]`
+- Runewords: `"subcategory": ["swords", "shields"]` (can be multi-valued)
+- Base items: `"subcategory": ["helms"]`
+- Runes/Gems: no subcategory (field omitted)
+
+### New `category` Field on Unique Items, Set Items, and Runewords
+
+These item types now have a **top-level** `category` and `subcategory` field directly on the item, in addition to the existing `base.category`:
+- `unique.category`: `"Armor"`, `unique.subcategory`: `["helms"]`
+- `setItem.category`: `"Weapons"`, `setItem.subcategory`: `["swords"]`
+- `runeword.category`: `"Weapons"`, `runeword.subcategory`: `["swords", "shields"]`
+
+### Base Items — `subcategory` Added
+
+`ItemBaseInfo` (nested in uniques/sets) and `BaseItemDetail` now include `subcategory`:
+```json
+{
+  "base": {
+    "code": "uap",
+    "name": "Shako",
+    "category": "Armor",
+    "subcategory": ["helms"],
+    "itemType": "Helm"
+  }
+}
+```
+
+### Categories Endpoint Now Hierarchical (`/categories`)
+
+Was: flat list of 14 categories.
+Now: 7 top-level categories with nested `subcategories` array:
+```json
+{
+  "code": "armor",
+  "name": "Armor",
+  "description": "Protective gear including helms, body armor, gloves, boots, and belts",
+  "subcategories": [
+    { "code": "helms", "name": "Helms" },
+    { "code": "body armor", "name": "Body Armor" },
+    { "code": "gloves", "name": "Gloves" }
+  ]
+}
+```
+
+### Bases Endpoint — Category Filter Values Changed (`/bases?category=`)
+
+Old valid values: `armor`, `weapon`, `misc`, `ring`, `amulet`, `charm`, `jewel`
+New valid values: `armor`, `weapons`, `jewelry`, `charms`, `runes`, `gems`, `misc`
+
+---
+
 ## Health Check
 
 Check if the API is running.
@@ -109,8 +186,9 @@ curl "http://localhost:8080/api/v1/d2/items/search?q=shako&limit=10"
     {
       "id": "123",
       "name": "Harlequin Crest",
-      "type": "unique",
-      "category": "helm",
+      "type": "Unique",
+      "category": "Armor",
+      "subcategory": ["helms"],
       "imageUrl": "https://...",
       "baseName": "Shako"
     }
@@ -130,14 +208,15 @@ curl "http://localhost:8080/api/v1/d2/items/search?q=shako&limit=10"
 
 ### Item Search Result Object
 
-| Field      | Type   | Description                                           |
-|------------|--------|-------------------------------------------------------|
-| `id`       | string | Item ID (use with detail endpoints)                   |
-| `name`     | string | Item name                                             |
-| `type`     | string | One of: `unique`, `set`, `runeword`, `rune`, `gem`, `base`, `quest` |
-| `category` | string | Item category (e.g., "helm", "armor", "weapon")       |
-| `imageUrl` | string | URL to item image (optional)                          |
-| `baseName` | string | Base item name for uniques/sets (optional)            |
+| Field         | Type     | Description                                           |
+|---------------|----------|-------------------------------------------------------|
+| `id`          | string   | Item ID (use with detail endpoints)                   |
+| `name`        | string   | Item name                                             |
+| `type`        | string   | One of: `Unique`, `Set`, `Runeword`, `Rune`, `Gem`, `Base`, `Quest` |
+| `category`    | string   | Item category: `"Armor"`, `"Weapons"`, `"Jewelry"`, `"Charms"`, `"Runes"`, `"Gems"`, `"Misc"` |
+| `subcategory` | string[] | Subcategory array (optional, e.g., `["helms"]`, `["swords", "shields"]`) |
+| `imageUrl`    | string   | URL to item image (optional)                          |
+| `baseName`    | string   | Base item name for uniques/sets (optional)            |
 
 ---
 
@@ -241,7 +320,7 @@ GET /api/v1/d2/bases
 
 | Parameter  | Type   | Required | Default | Description                              |
 |------------|--------|----------|---------|------------------------------------------|
-| `category` | string | No       | -       | Filter by category: `armor`, `weapon`, or `misc` |
+| `category` | string | No       | -       | Filter by category: `armor`, `weapons`, `jewelry`, `charms`, `runes`, `gems`, or `misc` |
 | `runeword` | number | No       | -       | Filter by runeword ID to get only valid bases for that runeword |
 
 ### Example Requests
@@ -253,8 +332,8 @@ curl "http://localhost:8080/api/v1/d2/bases"
 # Get only armor bases
 curl "http://localhost:8080/api/v1/d2/bases?category=armor"
 
-# Get only weapon bases
-curl "http://localhost:8080/api/v1/d2/bases?category=weapon"
+# Get only weapon bases (includes shields)
+curl "http://localhost:8080/api/v1/d2/bases?category=weapons"
 
 # Get only misc bases
 curl "http://localhost:8080/api/v1/d2/bases?category=misc"
@@ -277,6 +356,7 @@ curl "http://localhost:8080/api/v1/d2/bases?runeword=5&category=weapon"
     "type": "base",
     "rarity": "normal",
     "category": "Armor",
+    "subcategory": ["helms"],
     "itemType": "Helm",
     "tier": "Elite",
     "typeTags": ["Helms"],
@@ -324,14 +404,17 @@ curl "http://localhost:8080/api/v1/d2/uniques"
   {
     "id": 1,
     "name": "Harlequin Crest",
-    "type": "unique",
-    "rarity": "unique",
+    "type": "Unique",
+    "rarity": "Unique",
+    "category": "Armor",
+    "subcategory": ["helms"],
     "base": {
       "code": "uap",
       "name": "Shako",
-      "category": "armor",
-      "itemType": "helm",
-      "defense": 141,
+      "category": "Armor",
+      "subcategory": ["helms"],
+      "itemType": "Helm",
+      "defense": { "min": 98, "max": 141 },
       "maxSockets": 2
     },
     "requirements": {
@@ -373,13 +456,16 @@ curl "http://localhost:8080/api/v1/d2/sets"
     "id": 1,
     "name": "Tal Rasha's Horadric Crest",
     "setName": "Tal Rasha's Wrappings",
-    "type": "set",
-    "rarity": "set",
+    "type": "Set",
+    "rarity": "Set",
+    "category": "Armor",
+    "subcategory": ["helms"],
     "base": {
       "code": "urn",
       "name": "Death Mask",
-      "category": "armor",
-      "itemType": "helm"
+      "category": "Armor",
+      "subcategory": ["helms"],
+      "itemType": "Helm"
     },
     "requirements": {
       "level": 66,
@@ -423,6 +509,8 @@ curl "http://localhost:8080/api/v1/d2/runewords"
     "displayName": "Enigma",
     "type": "Runeword",
     "rarity": "Runeword",
+    "category": "Armor",
+    "subcategory": ["body armor"],
     "runes": [
       { "id": 31, "code": "r31", "name": "Jah", "imageUrl": "https://..." },
       { "id": 6, "code": "r06", "name": "Ith", "imageUrl": "https://..." },
@@ -575,14 +663,17 @@ curl "http://localhost:8080/api/v1/d2/items/unique/123"
   "unique": {
     "id": 123,
     "name": "Harlequin Crest",
-    "type": "unique",
-    "rarity": "unique",
+    "type": "Unique",
+    "rarity": "Unique",
+    "category": "Armor",
+    "subcategory": ["helms"],
     "base": {
       "code": "uap",
       "name": "Shako",
-      "category": "armor",
-      "itemType": "helm",
-      "defense": 141,
+      "category": "Armor",
+      "subcategory": ["helms"],
+      "itemType": "Helm",
+      "defense": { "min": 98, "max": 141 },
       "maxSockets": 2
     },
     "requirements": {
@@ -670,6 +761,8 @@ curl "http://localhost:8080/api/v1/d2/items/runeword/33"
     "displayName": "Enigma",
     "type": "Runeword",
     "rarity": "Runeword",
+    "category": "Armor",
+    "subcategory": ["body armor"],
     "runes": [
       { "id": 31, "code": "r31", "name": "Jah", "imageUrl": "https://..." },
       { "id": 6, "code": "r06", "name": "Ith", "imageUrl": "https://..." },
@@ -727,13 +820,13 @@ curl "http://localhost:8080/api/v1/d2/items/runeword/33/bases"
 
 ### RunewordBaseItem Object
 
-| Field       | Type   | Description                     |
-|-------------|--------|---------------------------------|
-| `id`        | number | Base item ID                    |
-| `code`      | string | Base item code                  |
-| `name`      | string | Base item name                  |
-| `category`  | string | `armor`, `weapon`, or `misc`    |
-| `maxSockets`| number | Maximum sockets for this base   |
+| Field       | Type   | Description                                        |
+|-------------|--------|----------------------------------------------------|
+| `id`        | number | Base item ID                                       |
+| `code`      | string | Base item code                                     |
+| `name`      | string | Base item name                                     |
+| `category`  | string | `"Armor"`, `"Weapons"`, `"Misc"`, etc.             |
+| `maxSockets`| number | Maximum sockets for this base                      |
 
 ---
 
@@ -851,6 +944,7 @@ curl "http://localhost:8080/api/v1/d2/items/base/100"
     "type": "Base",
     "rarity": "Normal",
     "category": "Armor",
+    "subcategory": ["helms"],
     "itemType": "Helm",
     "tier": "Elite",
     "typeTags": ["Helms"],
@@ -1267,9 +1361,10 @@ interface ItemRequirements {
 interface ItemBaseInfo {
   code: string;
   name: string;
-  category: "armor" | "weapon" | "misc";
+  category: string;              // "Armor", "Weapons", "Jewelry", "Charms", "Misc", etc.
+  subcategory?: string[];        // NEW: e.g., ["helms"], ["swords"]
   itemType: string;
-  defense?: number;
+  defense?: DefenseRange;
   minDamage?: number;
   maxDamage?: number;
   maxSockets?: number;
@@ -1315,7 +1410,8 @@ interface BaseItemDetail {
   name: string;
   type: string;                 // "Base"
   rarity: string;               // "Normal"
-  category: string;             // "Armor", "Weapon", "Misc"
+  category: string;             // "Armor", "Weapons", "Jewelry", "Charms", "Runes", "Gems", "Misc"
+  subcategory?: string[];       // NEW: e.g., ["helms"], ["swords"]
   itemType: string;             // "Helm", "Body Armor", etc.
   tier?: string;                // NEW: "Normal", "Exceptional", "Elite"
   typeTags?: string[];          // NEW: ["Helms"], ["Swords", "Melee Weapons"]
@@ -1341,7 +1437,7 @@ interface RunewordBaseItem {
   id: number;           // Base item ID
   code: string;         // Base item code
   name: string;         // Base item name
-  category: string;     // "armor", "weapon", or "misc"
+  category: string;     // "Armor", "Weapons", "Misc", etc.
   maxSockets: number;   // Maximum sockets for this base
 }
 ```
@@ -1592,85 +1688,91 @@ curl "http://localhost:8080/api/v1/d2/categories"
 ```json
 [
   {
-    "code": "helm",
-    "name": "Helms",
-    "description": "Head armor including circlets, crowns, and helmets"
-  },
-  {
     "code": "armor",
-    "name": "Body Armor",
-    "description": "Chest armor including robes, plate, and leather"
+    "name": "Armor",
+    "description": "Protective gear including helms, body armor, gloves, boots, and belts",
+    "subcategories": [
+      { "code": "helms", "name": "Helms" },
+      { "code": "circlets", "name": "Circlets" },
+      { "code": "barbarian helms", "name": "Barbarian Helms" },
+      { "code": "druid pelts", "name": "Druid Pelts" },
+      { "code": "body armor", "name": "Body Armor" },
+      { "code": "gloves", "name": "Gloves" },
+      { "code": "boots", "name": "Boots" },
+      { "code": "belts", "name": "Belts" }
+    ]
   },
   {
-    "code": "weapon",
+    "code": "weapons",
     "name": "Weapons",
-    "description": "All weapon types including swords, axes, bows, and staves"
+    "description": "All weapon types including melee, ranged, caster weapons, and shields",
+    "subcategories": [
+      { "code": "swords", "name": "Swords" },
+      { "code": "axes", "name": "Axes" },
+      { "code": "maces", "name": "Maces" },
+      { "code": "shields", "name": "Shields" },
+      { "code": "paladin shields", "name": "Paladin Shields" }
+    ]
   },
   {
-    "code": "shield",
-    "name": "Shields",
-    "description": "Shields and paladin-specific shields"
+    "code": "jewelry",
+    "name": "Jewelry",
+    "description": "Rings, amulets, and jewels",
+    "subcategories": [
+      { "code": "rings", "name": "Rings" },
+      { "code": "amulets", "name": "Amulets" },
+      { "code": "jewels", "name": "Jewels" }
+    ]
   },
   {
-    "code": "gloves",
-    "name": "Gloves",
-    "description": "Hand armor including gauntlets and bracers"
-  },
-  {
-    "code": "boots",
-    "name": "Boots",
-    "description": "Foot armor including greaves and boots"
-  },
-  {
-    "code": "belt",
-    "name": "Belts",
-    "description": "Waist armor including sashes and belts"
-  },
-  {
-    "code": "amulet",
-    "name": "Amulets",
-    "description": "Neck jewelry"
-  },
-  {
-    "code": "ring",
-    "name": "Rings",
-    "description": "Finger jewelry"
-  },
-  {
-    "code": "charm",
+    "code": "charms",
     "name": "Charms",
-    "description": "Inventory charms (small, large, grand)"
+    "description": "Inventory charms that provide passive bonuses",
+    "subcategories": [
+      { "code": "small charm", "name": "Small Charms" },
+      { "code": "large charm", "name": "Large Charms" },
+      { "code": "grand charm", "name": "Grand Charms" }
+    ]
   },
   {
-    "code": "jewel",
-    "name": "Jewels",
-    "description": "Socketable jewels with random magical properties"
-  },
-  {
-    "code": "rune",
+    "code": "runes",
     "name": "Runes",
     "description": "Socketable runes used to create runewords"
   },
   {
-    "code": "gem",
+    "code": "gems",
     "name": "Gems",
     "description": "Socketable gems from chipped to perfect quality"
   },
   {
     "code": "misc",
     "name": "Miscellaneous",
-    "description": "Keys, organs, tokens, and other items"
+    "description": "Keys, essences, tokens, and other items",
+    "subcategories": [
+      { "code": "keys", "name": "Keys" },
+      { "code": "essences", "name": "Essences" },
+      { "code": "tokens", "name": "Tokens" },
+      { "code": "quest items", "name": "Quest Items" }
+    ]
   }
 ]
 ```
 
 ### Category Object
 
-| Field         | Type   | Description                                      |
-|---------------|--------|--------------------------------------------------|
-| `code`        | string | Internal code for filtering                      |
-| `name`        | string | Display name for UI                              |
-| `description` | string | Brief description of items in this category      |
+| Field           | Type     | Description                                      |
+|-----------------|----------|--------------------------------------------------|
+| `code`          | string   | Internal code for filtering                      |
+| `name`          | string   | Display name for UI                              |
+| `description`   | string   | Brief description of items in this category      |
+| `subcategories` | array    | Nested subcategories (optional, omitted if none) |
+
+### Subcategory Object
+
+| Field  | Type   | Description                                     |
+|--------|--------|-------------------------------------------------|
+| `code` | string | Internal code for filtering (e.g., `"helms"`)   |
+| `name` | string | Display name for UI (e.g., `"Helms"`)           |
 
 ---
 

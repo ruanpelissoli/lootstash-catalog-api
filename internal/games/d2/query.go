@@ -11,12 +11,13 @@ import (
 
 // SearchResult represents a unified search result from any item type
 type SearchResult struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	Type     string `json:"type"`     // "unique", "set", "runeword", "rune", "gem", "base"
-	Category string `json:"category"` // Item category: "helm", "armor", etc.
-	BaseName string `json:"baseName,omitempty"`
-	ImageURL string `json:"imageUrl,omitempty"`
+	ID          int      `json:"id"`
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`                  // "unique", "set", "runeword", "rune", "gem", "base"
+	Category    string   `json:"category"`              // Item category: "armor", "weapons", "jewelry", etc.
+	Subcategory []string `json:"subcategory,omitempty"` // e.g. ["helms"], ["swords", "shields"]
+	BaseName    string   `json:"baseName,omitempty"`
+	ImageURL    string   `json:"imageUrl,omitempty"`
 }
 
 // SearchItems searches across all item types by name
@@ -31,105 +32,58 @@ func (r *Repository) SearchItems(ctx context.Context, query string, limit int) (
 	// Prepare the search pattern for ILIKE
 	pattern := "%" + strings.ToLower(query) + "%"
 
-	// Union query across all item types
+	// Union query across all item types — categories are pre-computed
 	sql := `
 		WITH all_items AS (
 			-- Unique items
-			SELECT
-				id,
-				name,
-				'unique' as type,
-				COALESCE(
-					(SELECT it.name
-					 FROM d2.item_types it
-					 JOIN d2.item_bases ib ON ib.item_type = it.code
-					 WHERE ib.code = unique_items.base_code LIMIT 1),
-					(SELECT ib.category
-					 FROM d2.item_bases ib
-					 WHERE ib.code = unique_items.base_code LIMIT 1),
-					'Unknown'
-				) as category,
-				base_name,
-				image_url
+			SELECT id, name, 'unique' as type,
+				COALESCE(category, '') as category, COALESCE(subcategory, '{}') as subcategory,
+				base_name, image_url
 			FROM d2.unique_items
 			WHERE enabled = true AND LOWER(name) LIKE $1
 
 			UNION ALL
 
 			-- Set items
-			SELECT
-				id,
-				name,
-				'set' as type,
-				COALESCE(
-					(SELECT it.name
-					 FROM d2.item_types it
-					 JOIN d2.item_bases ib ON ib.item_type = it.code
-					 WHERE ib.code = set_items.base_code LIMIT 1),
-					(SELECT ib.category
-					 FROM d2.item_bases ib
-					 WHERE ib.code = set_items.base_code LIMIT 1),
-					'Unknown'
-				) as category,
-				base_name,
-				image_url
+			SELECT id, name, 'set' as type,
+				COALESCE(category, '') as category, COALESCE(subcategory, '{}') as subcategory,
+				base_name, image_url
 			FROM d2.set_items
 			WHERE LOWER(name) LIKE $1
 
 			UNION ALL
 
 			-- Runewords
-			SELECT
-				id,
-				display_name as name,
-				'runeword' as type,
-				'Runeword' as category,
-				NULL as base_name,
-				image_url
+			SELECT id, display_name as name, 'runeword' as type,
+				COALESCE(category, 'weapons') as category, COALESCE(subcategory, '{}') as subcategory,
+				NULL as base_name, image_url
 			FROM d2.runewords
 			WHERE complete = true AND LOWER(display_name) LIKE $1
 
 			UNION ALL
 
 			-- Runes
-			SELECT
-				id,
-				name,
-				'rune' as type,
-				'Rune' as category,
-				NULL as base_name,
-				image_url
+			SELECT id, name, 'rune' as type,
+				'runes' as category, '{}'::text[] as subcategory,
+				NULL as base_name, image_url
 			FROM d2.runes
 			WHERE LOWER(name) LIKE $1
 
 			UNION ALL
 
 			-- Gems
-			SELECT
-				id,
-				name,
-				'gem' as type,
-				'Gem' as category,
-				NULL as base_name,
-				image_url
+			SELECT id, name, 'gem' as type,
+				'gems' as category, '{}'::text[] as subcategory,
+				NULL as base_name, image_url
 			FROM d2.gems
 			WHERE LOWER(name) LIKE $1
 
 			UNION ALL
 
 			-- Base items (only tradable items)
-			SELECT
-				id,
-				name,
-				'base' as type,
-				COALESCE(
-					(SELECT it.name
-					 FROM d2.item_types it
-					 WHERE it.code = item_bases.item_type LIMIT 1),
-					category
-				) as category,
-				NULL as base_name,
-				image_url
+			SELECT id, name, 'base' as type,
+				category, COALESCE(subcategory, '{}') as subcategory,
+				NULL as base_name, image_url
 			FROM d2.item_bases
 			WHERE spawnable = true AND tradable = true AND LOWER(name) LIKE $1
 				AND NOT EXISTS (SELECT 1 FROM d2.gems g WHERE g.code = item_bases.code)
@@ -138,17 +92,13 @@ func (r *Repository) SearchItems(ctx context.Context, query string, limit int) (
 			UNION ALL
 
 			-- Quest items
-			SELECT
-				id,
-				name,
-				'quest' as type,
-				'Quest' as category,
-				NULL as base_name,
-				image_url
+			SELECT id, name, 'quest' as type,
+				'misc' as category, '{quest}'::text[] as subcategory,
+				NULL as base_name, image_url
 			FROM d2.item_bases
 			WHERE quest_item = true AND LOWER(name) LIKE $1
 		)
-		SELECT id, name, type, category, base_name, image_url
+		SELECT id, name, type, category, subcategory, base_name, image_url
 		FROM all_items
 		ORDER BY
 			CASE
@@ -171,7 +121,7 @@ func (r *Repository) SearchItems(ctx context.Context, query string, limit int) (
 	for rows.Next() {
 		var sr SearchResult
 		var baseName, imageURL *string
-		err := rows.Scan(&sr.ID, &sr.Name, &sr.Type, &sr.Category, &baseName, &imageURL)
+		err := rows.Scan(&sr.ID, &sr.Name, &sr.Type, &sr.Category, &sr.Subcategory, &baseName, &imageURL)
 		if err != nil {
 			return nil, fmt.Errorf("scan search result failed: %w", err)
 		}
@@ -191,7 +141,8 @@ func (r *Repository) SearchItems(ctx context.Context, query string, limit int) (
 func (r *Repository) GetUniqueItem(ctx context.Context, id int) (*UniqueItem, error) {
 	sql := `
 		SELECT
-			id, index_id, name, base_code, base_name, level, level_req, rarity,
+			id, index_id, name, base_code, base_name, COALESCE(category, ''), COALESCE(subcategory, '{}'),
+			level, level_req, rarity,
 			enabled, ladder_only, first_ladder_season, last_ladder_season,
 			properties, inv_transform, chr_transform, inv_file, image_url,
 			cost_mult, cost_add, created_at, updated_at
@@ -204,7 +155,8 @@ func (r *Repository) GetUniqueItem(ctx context.Context, id int) (*UniqueItem, er
 	var propsJSON []byte
 
 	err := r.pool.QueryRow(ctx, sql, id).Scan(
-		&ui.ID, &ui.IndexID, &ui.Name, &ui.BaseCode, &baseName, &ui.Level, &ui.LevelReq, &ui.Rarity,
+		&ui.ID, &ui.IndexID, &ui.Name, &ui.BaseCode, &baseName, &ui.Category, &ui.Subcategory,
+		&ui.Level, &ui.LevelReq, &ui.Rarity,
 		&ui.Enabled, &ui.LadderOnly, &ui.FirstLadderSeason, &ui.LastLadderSeason,
 		&propsJSON, &invTransform, &chrTransform, &invFile, &imageURL,
 		&ui.CostMult, &ui.CostAdd, &ui.CreatedAt, &ui.UpdatedAt,
@@ -255,7 +207,8 @@ func (r *Repository) GetUniqueItemByName(ctx context.Context, name string) (*Uni
 func (r *Repository) GetSetItem(ctx context.Context, id int) (*SetItem, error) {
 	sql := `
 		SELECT
-			id, index_id, name, set_name, base_code, base_name, level, level_req, rarity,
+			id, index_id, name, set_name, base_code, base_name, COALESCE(category, ''), COALESCE(subcategory, '{}'),
+			level, level_req, rarity,
 			properties, bonus_properties, inv_transform, chr_transform, inv_file, image_url,
 			cost_mult, cost_add, created_at, updated_at
 		FROM d2.set_items
@@ -267,7 +220,8 @@ func (r *Repository) GetSetItem(ctx context.Context, id int) (*SetItem, error) {
 	var propsJSON, bonusPropsJSON []byte
 
 	err := r.pool.QueryRow(ctx, sql, id).Scan(
-		&si.ID, &si.IndexID, &si.Name, &si.SetName, &si.BaseCode, &baseName, &si.Level, &si.LevelReq, &si.Rarity,
+		&si.ID, &si.IndexID, &si.Name, &si.SetName, &si.BaseCode, &baseName, &si.Category, &si.Subcategory,
+		&si.Level, &si.LevelReq, &si.Rarity,
 		&propsJSON, &bonusPropsJSON, &invTransform, &chrTransform, &invFile, &imageURL,
 		&si.CostMult, &si.CostAdd, &si.CreatedAt, &si.UpdatedAt,
 	)
@@ -309,8 +263,9 @@ func (r *Repository) GetSetItem(ctx context.Context, id int) (*SetItem, error) {
 func (r *Repository) GetRuneword(ctx context.Context, id int) (*Runeword, error) {
 	sql := `
 		SELECT
-			id, name, display_name, complete, ladder_only, first_ladder_season, last_ladder_season,
-			valid_item_types, excluded_item_types, runes, properties, image_url,
+			id, name, display_name, COALESCE(category, ''), COALESCE(subcategory, '{}'),
+			complete, ladder_only, first_ladder_season, last_ladder_season,
+			valid_item_types, excluded_item_types, runes, properties, properties_by_type, image_url,
 			created_at, updated_at
 		FROM d2.runewords
 		WHERE id = $1
@@ -318,11 +273,12 @@ func (r *Repository) GetRuneword(ctx context.Context, id int) (*Runeword, error)
 
 	var rw Runeword
 	var imageURL *string
-	var validTypesJSON, excludedTypesJSON, runesJSON, propsJSON []byte
+	var validTypesJSON, excludedTypesJSON, runesJSON, propsJSON, propsByTypeJSON []byte
 
 	err := r.pool.QueryRow(ctx, sql, id).Scan(
-		&rw.ID, &rw.Name, &rw.DisplayName, &rw.Complete, &rw.LadderOnly, &rw.FirstLadderSeason, &rw.LastLadderSeason,
-		&validTypesJSON, &excludedTypesJSON, &runesJSON, &propsJSON, &imageURL,
+		&rw.ID, &rw.Name, &rw.DisplayName, &rw.Category, &rw.Subcategory,
+		&rw.Complete, &rw.LadderOnly, &rw.FirstLadderSeason, &rw.LastLadderSeason,
+		&validTypesJSON, &excludedTypesJSON, &runesJSON, &propsJSON, &propsByTypeJSON, &imageURL,
 		&rw.CreatedAt, &rw.UpdatedAt,
 	)
 	if err != nil {
@@ -351,6 +307,11 @@ func (r *Repository) GetRuneword(ctx context.Context, id int) (*Runeword, error)
 	if len(propsJSON) > 0 {
 		if err := json.Unmarshal(propsJSON, &rw.Properties); err != nil {
 			return nil, fmt.Errorf("unmarshal properties failed: %w", err)
+		}
+	}
+	if len(propsByTypeJSON) > 0 {
+		if err := json.Unmarshal(propsByTypeJSON, &rw.PropertiesByType); err != nil {
+			return nil, fmt.Errorf("unmarshal properties_by_type failed: %w", err)
 		}
 	}
 
@@ -485,7 +446,7 @@ func (r *Repository) GetGem(ctx context.Context, id int) (*Gem, error) {
 func (r *Repository) GetItemBase(ctx context.Context, id int) (*ItemBase, error) {
 	sql := `
 		SELECT
-			id, code, name, item_type, item_type2, category,
+			id, code, name, item_type, item_type2, category, COALESCE(subcategory, '{}'),
 			COALESCE(tier, 'Normal'), COALESCE(type_tags, '{}'), class_specific, COALESCE(tradable, true),
 			level, level_req, str_req, dex_req, durability,
 			min_ac, max_ac, min_dam, max_dam, two_hand_min_dam, two_hand_max_dam,
@@ -504,7 +465,7 @@ func (r *Repository) GetItemBase(ctx context.Context, id int) (*ItemBase, error)
 	var invFile, flippyFile, uniqueInvFile, setInvFile, imageURL, description, classSpecific *string
 
 	err := r.pool.QueryRow(ctx, sql, id).Scan(
-		&ib.ID, &ib.Code, &ib.Name, &ib.ItemType, &itemType2, &ib.Category,
+		&ib.ID, &ib.Code, &ib.Name, &ib.ItemType, &itemType2, &ib.Category, &ib.Subcategory,
 		&ib.Tier, &ib.TypeTags, &classSpecific, &ib.Tradable,
 		&ib.Level, &ib.LevelReq, &ib.StrReq, &ib.DexReq, &ib.Durability,
 		&ib.MinAC, &ib.MaxAC, &ib.MinDam, &ib.MaxDam, &ib.TwoHandMinDam, &ib.TwoHandMaxDam,

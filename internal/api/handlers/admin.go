@@ -373,6 +373,18 @@ func (h *AdminHandler) createRuneword(c *fiber.Ctx) error {
 		ImageURL:       req.ImageURL,
 	}
 
+	if len(req.PropertiesByType) > 0 {
+		item.PropertiesByType = make(map[string][]d2.Property)
+		for typeName, inputs := range req.PropertiesByType {
+			typeProps := convertInputProperties(inputs)
+			for i := range typeProps {
+				typeProps[i].DisplayText = h.translator.Translate(typeProps[i])
+				typeProps[i].HasRange = typeProps[i].Min != typeProps[i].Max
+			}
+			item.PropertiesByType[typeName] = typeProps
+		}
+	}
+
 	if err := h.repo.UpsertRuneword(c.Context(), item); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
 			Error:   "internal_error",
@@ -408,6 +420,18 @@ func (h *AdminHandler) updateRuneword(c *fiber.Ctx, id int) error {
 		Runes:          req.Runes,
 		Properties:     props,
 		ImageURL:       req.ImageURL,
+	}
+
+	if len(req.PropertiesByType) > 0 {
+		item.PropertiesByType = make(map[string][]d2.Property)
+		for typeName, inputs := range req.PropertiesByType {
+			typeProps := convertInputProperties(inputs)
+			for i := range typeProps {
+				typeProps[i].DisplayText = h.translator.Translate(typeProps[i])
+				typeProps[i].HasRange = typeProps[i].Min != typeProps[i].Max
+			}
+			item.PropertiesByType[typeName] = typeProps
+		}
 	}
 
 	if err := h.repo.UpdateRunewordFields(c.Context(), id, item); err != nil {

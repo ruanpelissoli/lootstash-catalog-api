@@ -59,7 +59,7 @@ func (r *Repository) ItemBaseExists(ctx context.Context, code string) (bool, err
 
 func (r *Repository) UpsertItemBase(ctx context.Context, ib *ItemBase) error {
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO d2.item_bases (code, name, item_type, item_type2, category, tier, type_tags, class_specific, tradable,
+		INSERT INTO d2.item_bases (code, name, item_type, item_type2, category, subcategory, tier, type_tags, class_specific, tradable,
 			level, level_req, str_req, dex_req,
 			durability, min_ac, max_ac, min_dam, max_dam, two_hand_min_dam, two_hand_max_dam, range_adder, speed,
 			str_bonus, dex_bonus, max_sockets, gem_apply_type, normal_code, exceptional_code, elite_code,
@@ -67,12 +67,13 @@ func (r *Repository) UpsertItemBase(ctx context.Context, ib *ItemBase) error {
 			spawnable, stackable, useable, throwable, quest_item, rarity, cost)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
 			$21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39,
-			$40, $41, $42, $43)
+			$40, $41, $42, $43, $44)
 		ON CONFLICT (code) DO UPDATE SET
 			name = EXCLUDED.name,
 			item_type = EXCLUDED.item_type,
 			item_type2 = EXCLUDED.item_type2,
 			category = EXCLUDED.category,
+			subcategory = EXCLUDED.subcategory,
 			tier = EXCLUDED.tier,
 			type_tags = EXCLUDED.type_tags,
 			class_specific = EXCLUDED.class_specific,
@@ -112,7 +113,7 @@ func (r *Repository) UpsertItemBase(ctx context.Context, ib *ItemBase) error {
 			rarity = EXCLUDED.rarity,
 			cost = EXCLUDED.cost,
 			updated_at = NOW()`,
-		ib.Code, ib.Name, ib.ItemType, nullString(ib.ItemType2), ib.Category,
+		ib.Code, ib.Name, ib.ItemType, nullString(ib.ItemType2), ib.Category, ib.Subcategory,
 		nullString(ib.Tier), ib.TypeTags, nullString(ib.ClassSpecific), ib.Tradable,
 		ib.Level, ib.LevelReq, ib.StrReq, ib.DexReq,
 		ib.Durability, ib.MinAC, ib.MaxAC, ib.MinDam, ib.MaxDam, ib.TwoHandMinDam, ib.TwoHandMaxDam, ib.RangeAdder, ib.Speed,
@@ -167,13 +168,15 @@ func (r *Repository) UpsertUniqueItem(ctx context.Context, ui *UniqueItem) error
 func (r *Repository) UpsertUniqueItemByName(ctx context.Context, ui *UniqueItem) error {
 	propsJSON, _ := json.Marshal(ui.Properties)
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO d2.unique_items (index_id, name, base_code, base_name, level, level_req, rarity, enabled,
+		INSERT INTO d2.unique_items (index_id, name, base_code, base_name, category, subcategory, level, level_req, rarity, enabled,
 			ladder_only, first_ladder_season, last_ladder_season, properties, inv_transform, chr_transform,
 			inv_file, image_url, cost_mult, cost_add)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 		ON CONFLICT (name) DO UPDATE SET
 			base_code = CASE WHEN EXCLUDED.base_code != '' THEN EXCLUDED.base_code ELSE d2.unique_items.base_code END,
 			base_name = COALESCE(EXCLUDED.base_name, d2.unique_items.base_name),
+			category = EXCLUDED.category,
+			subcategory = EXCLUDED.subcategory,
 			level = EXCLUDED.level,
 			level_req = EXCLUDED.level_req,
 			rarity = EXCLUDED.rarity,
@@ -189,7 +192,8 @@ func (r *Repository) UpsertUniqueItemByName(ctx context.Context, ui *UniqueItem)
 			cost_mult = EXCLUDED.cost_mult,
 			cost_add = EXCLUDED.cost_add,
 			updated_at = NOW()`,
-		ui.IndexID, ui.Name, ui.BaseCode, nullString(ui.BaseName), ui.Level, ui.LevelReq, ui.Rarity, ui.Enabled,
+		ui.IndexID, ui.Name, ui.BaseCode, nullString(ui.BaseName), ui.Category, ui.Subcategory,
+		ui.Level, ui.LevelReq, ui.Rarity, ui.Enabled,
 		ui.LadderOnly, ui.FirstLadderSeason, ui.LastLadderSeason, string(propsJSON),
 		nullString(ui.InvTransform), nullString(ui.ChrTransform), nullString(ui.InvFile), nullString(ui.ImageURL),
 		ui.CostMult, ui.CostAdd)
@@ -260,13 +264,15 @@ func (r *Repository) UpsertSetItemByName(ctx context.Context, si *SetItem) error
 	propsJSON, _ := json.Marshal(si.Properties)
 	bonusJSON, _ := json.Marshal(si.BonusProperties)
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO d2.set_items (index_id, name, set_name, base_code, base_name, level, level_req, rarity,
+		INSERT INTO d2.set_items (index_id, name, set_name, base_code, base_name, category, subcategory, level, level_req, rarity,
 			properties, bonus_properties, inv_transform, chr_transform, inv_file, image_url, cost_mult, cost_add)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 		ON CONFLICT (name) DO UPDATE SET
 			set_name = EXCLUDED.set_name,
 			base_code = CASE WHEN EXCLUDED.base_code != '' THEN EXCLUDED.base_code ELSE d2.set_items.base_code END,
 			base_name = COALESCE(EXCLUDED.base_name, d2.set_items.base_name),
+			category = EXCLUDED.category,
+			subcategory = EXCLUDED.subcategory,
 			level = EXCLUDED.level,
 			level_req = EXCLUDED.level_req,
 			rarity = EXCLUDED.rarity,
@@ -279,7 +285,8 @@ func (r *Repository) UpsertSetItemByName(ctx context.Context, si *SetItem) error
 			cost_mult = EXCLUDED.cost_mult,
 			cost_add = EXCLUDED.cost_add,
 			updated_at = NOW()`,
-		si.IndexID, si.Name, si.SetName, si.BaseCode, nullString(si.BaseName), si.Level, si.LevelReq, si.Rarity,
+		si.IndexID, si.Name, si.SetName, si.BaseCode, nullString(si.BaseName), si.Category, si.Subcategory,
+		si.Level, si.LevelReq, si.Rarity,
 		string(propsJSON), string(bonusJSON), nullString(si.InvTransform), nullString(si.ChrTransform),
 		nullString(si.InvFile), nullString(si.ImageURL), si.CostMult, si.CostAdd)
 	return err
@@ -297,12 +304,20 @@ func (r *Repository) UpsertRuneword(ctx context.Context, rw *Runeword) error {
 	excludedTypesJSON, _ := json.Marshal(rw.ExcludedItemTypes)
 	runesJSON, _ := json.Marshal(rw.Runes)
 	propsJSON, _ := json.Marshal(rw.Properties)
+	var propsByTypeJSON *string
+	if len(rw.PropertiesByType) > 0 {
+		b, _ := json.Marshal(rw.PropertiesByType)
+		s := string(b)
+		propsByTypeJSON = &s
+	}
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO d2.runewords (name, display_name, complete, ladder_only, first_ladder_season, last_ladder_season,
-			valid_item_types, excluded_item_types, runes, properties, image_url)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO d2.runewords (name, display_name, category, subcategory, complete, ladder_only, first_ladder_season, last_ladder_season,
+			valid_item_types, excluded_item_types, runes, properties, properties_by_type, image_url)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		ON CONFLICT (name) DO UPDATE SET
 			display_name = EXCLUDED.display_name,
+			category = EXCLUDED.category,
+			subcategory = EXCLUDED.subcategory,
 			complete = EXCLUDED.complete,
 			ladder_only = EXCLUDED.ladder_only,
 			first_ladder_season = EXCLUDED.first_ladder_season,
@@ -311,10 +326,11 @@ func (r *Repository) UpsertRuneword(ctx context.Context, rw *Runeword) error {
 			excluded_item_types = EXCLUDED.excluded_item_types,
 			runes = EXCLUDED.runes,
 			properties = EXCLUDED.properties,
+			properties_by_type = EXCLUDED.properties_by_type,
 			image_url = COALESCE(EXCLUDED.image_url, d2.runewords.image_url),
 			updated_at = NOW()`,
-		rw.Name, rw.DisplayName, rw.Complete, rw.LadderOnly, rw.FirstLadderSeason, rw.LastLadderSeason,
-		string(validTypesJSON), string(excludedTypesJSON), string(runesJSON), string(propsJSON), nullString(rw.ImageURL))
+		rw.Name, rw.DisplayName, rw.Category, rw.Subcategory, rw.Complete, rw.LadderOnly, rw.FirstLadderSeason, rw.LastLadderSeason,
+		string(validTypesJSON), string(excludedTypesJSON), string(runesJSON), string(propsJSON), propsByTypeJSON, nullString(rw.ImageURL))
 	return err
 }
 
@@ -1000,6 +1016,30 @@ func (r *Repository) GetItemTypesByCodes(ctx context.Context, codes []string) (m
 	return result, rows.Err()
 }
 
+// GetBaseCodeToCategoryMap returns a mapping of base item codes to (category, subcategory)
+func (r *Repository) GetBaseCodeToCategoryMap(ctx context.Context) (map[string]CategoryPair, error) {
+	rows, err := r.pool.Query(ctx, `SELECT code, category, COALESCE(subcategory, '{}') FROM d2.item_bases`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]CategoryPair)
+	for rows.Next() {
+		var code, category string
+		var subcategory []string
+		if err := rows.Scan(&code, &category, &subcategory); err != nil {
+			return nil, err
+		}
+		sub := ""
+		if len(subcategory) > 0 {
+			sub = subcategory[0]
+		}
+		result[code] = CategoryPair{Category: category, Subcategory: sub}
+	}
+	return result, rows.Err()
+}
+
 // GetAllItemBaseNameToCode returns a mapping of base item names to codes (e.g., "Kris" -> "kri")
 func (r *Repository) GetAllItemBaseNameToCode(ctx context.Context) (map[string]string, error) {
 	rows, err := r.pool.Query(ctx, `SELECT name, code FROM d2.item_bases`)
@@ -1248,15 +1288,22 @@ func (r *Repository) UpdateRunewordFields(ctx context.Context, id int, item *Run
 	validTypesJSON, _ := json.Marshal(item.ValidItemTypes)
 	runesJSON, _ := json.Marshal(item.Runes)
 	propsJSON, _ := json.Marshal(item.Properties)
+	var propsByTypeJSON *string
+	if len(item.PropertiesByType) > 0 {
+		b, _ := json.Marshal(item.PropertiesByType)
+		s := string(b)
+		propsByTypeJSON = &s
+	}
 	_, err := r.pool.Exec(ctx, `
 		UPDATE d2.runewords SET
 			name = $2, display_name = $3, ladder_only = $4,
 			valid_item_types = $5, runes = $6, properties = $7,
-			image_url = COALESCE($8, image_url),
+			properties_by_type = $8,
+			image_url = COALESCE($9, image_url),
 			updated_at = NOW()
 		WHERE id = $1`,
 		id, item.Name, item.DisplayName, item.LadderOnly,
-		string(validTypesJSON), string(runesJSON), string(propsJSON), nullString(item.ImageURL))
+		string(validTypesJSON), string(runesJSON), string(propsJSON), propsByTypeJSON, nullString(item.ImageURL))
 	return err
 }
 

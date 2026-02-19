@@ -1,10 +1,17 @@
 package d2
 
+// SubcategoryInfo contains metadata about an item subcategory
+type SubcategoryInfo struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
 // CategoryInfo contains metadata about an item category
 type CategoryInfo struct {
-	Code        string `json:"code"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
+	Code          string            `json:"code"`
+	Name          string            `json:"name"`
+	Description   string            `json:"description,omitempty"`
+	Subcategories []SubcategoryInfo `json:"subcategories,omitempty"`
 }
 
 // RarityInfo contains metadata about an item rarity
@@ -15,23 +22,93 @@ type RarityInfo struct {
 	Description string `json:"description"` // Brief description of this rarity type
 }
 
-// Categories returns all item categories for Diablo 2
+// Categories returns all item categories for Diablo 2 in a hierarchical structure
 func Categories() []CategoryInfo {
 	return []CategoryInfo{
-		{Code: "helm", Name: "Helms", Description: "Head armor including circlets, crowns, and helmets"},
-		{Code: "armor", Name: "Body Armor", Description: "Chest armor including robes, plate, and leather"},
-		{Code: "weapon", Name: "Weapons", Description: "All weapon types including swords, axes, bows, and staves"},
-		{Code: "shield", Name: "Shields", Description: "Shields and paladin-specific shields"},
-		{Code: "gloves", Name: "Gloves", Description: "Hand armor including gauntlets and bracers"},
-		{Code: "boots", Name: "Boots", Description: "Foot armor including greaves and boots"},
-		{Code: "belt", Name: "Belts", Description: "Waist armor including sashes and belts"},
-		{Code: "amulet", Name: "Amulets", Description: "Neck jewelry"},
-		{Code: "ring", Name: "Rings", Description: "Finger jewelry"},
-		{Code: "charm", Name: "Charms", Description: "Inventory charms (small, large, grand)"},
-		{Code: "jewel", Name: "Jewels", Description: "Socketable jewels with random magical properties"},
-		{Code: "rune", Name: "Runes", Description: "Socketable runes used to create runewords"},
-		{Code: "gem", Name: "Gems", Description: "Socketable gems from chipped to perfect quality"},
-		{Code: "misc", Name: "Miscellaneous", Description: "Keys, organs, tokens, and other items"},
+		{
+			Code:        "armor",
+			Name:        "Armor",
+			Description: "Protective gear including helms, body armor, gloves, boots, and belts",
+			Subcategories: []SubcategoryInfo{
+				{Code: "helms", Name: "Helms"},
+				{Code: "circlets", Name: "Circlets"},
+				{Code: "barbarian helms", Name: "Barbarian Helms"},
+				{Code: "druid pelts", Name: "Druid Pelts"},
+				{Code: "body armor", Name: "Body Armor"},
+				{Code: "gloves", Name: "Gloves"},
+				{Code: "boots", Name: "Boots"},
+				{Code: "belts", Name: "Belts"},
+			},
+		},
+		{
+			Code:        "weapons",
+			Name:        "Weapons",
+			Description: "All weapon types including melee, ranged, caster weapons, and shields",
+			Subcategories: []SubcategoryInfo{
+				{Code: "swords", Name: "Swords"},
+				{Code: "axes", Name: "Axes"},
+				{Code: "maces", Name: "Maces"},
+				{Code: "hammers", Name: "Hammers"},
+				{Code: "clubs", Name: "Clubs"},
+				{Code: "polearms", Name: "Polearms"},
+				{Code: "staves", Name: "Staves"},
+				{Code: "scepters", Name: "Scepters"},
+				{Code: "wands", Name: "Wands"},
+				{Code: "bows", Name: "Bows"},
+				{Code: "crossbows", Name: "Crossbows"},
+				{Code: "daggers", Name: "Daggers"},
+				{Code: "throwing", Name: "Throwing"},
+				{Code: "javelins", Name: "Javelins"},
+				{Code: "spears", Name: "Spears"},
+				{Code: "claws", Name: "Claws"},
+				{Code: "orbs", Name: "Orbs"},
+				{Code: "grimoires", Name: "Grimoires"},
+				{Code: "shields", Name: "Shields"},
+				{Code: "paladin shields", Name: "Paladin Shields"},
+				{Code: "necromancer shields", Name: "Necromancer Shields"},
+			},
+		},
+		{
+			Code:        "jewelry",
+			Name:        "Jewelry",
+			Description: "Rings, amulets, and jewels",
+			Subcategories: []SubcategoryInfo{
+				{Code: "rings", Name: "Rings"},
+				{Code: "amulets", Name: "Amulets"},
+				{Code: "jewels", Name: "Jewels"},
+			},
+		},
+		{
+			Code:        "charms",
+			Name:        "Charms",
+			Description: "Inventory charms that provide passive bonuses",
+			Subcategories: []SubcategoryInfo{
+				{Code: "small charm", Name: "Small Charms"},
+				{Code: "large charm", Name: "Large Charms"},
+				{Code: "grand charm", Name: "Grand Charms"},
+			},
+		},
+		{
+			Code:        "runes",
+			Name:        "Runes",
+			Description: "Socketable runes used to create runewords",
+		},
+		{
+			Code:        "gems",
+			Name:        "Gems",
+			Description: "Socketable gems from chipped to perfect quality",
+		},
+		{
+			Code:        "misc",
+			Name:        "Miscellaneous",
+			Description: "Keys, essences, tokens, and other items",
+			Subcategories: []SubcategoryInfo{
+				{Code: "keys", Name: "Keys"},
+				{Code: "essences", Name: "Essences"},
+				{Code: "tokens", Name: "Tokens"},
+				{Code: "quest items", Name: "Quest Items"},
+			},
+		},
 	}
 }
 

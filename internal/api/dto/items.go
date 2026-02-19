@@ -2,12 +2,13 @@ package dto
 
 // ItemSearchResult represents a single item in search autocomplete results
 type ItemSearchResult struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Type     string `json:"type"`     // "unique", "set", "runeword", "rune", "base", "gem"
-	Category string `json:"category"` // "Helms", "Armor", "Weapons", etc.
-	ImageURL string `json:"imageUrl,omitempty"`
-	BaseName string `json:"baseName,omitempty"` // For uniques/sets: "Shako", "Diadem", etc.
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`                  // "unique", "set", "runeword", "rune", "base", "gem"
+	Category    string   `json:"category"`              // "armor", "weapons", "jewelry", "charms", etc.
+	Subcategory []string `json:"subcategory,omitempty"` // e.g. ["helms"], ["swords", "shields"]
+	ImageURL    string   `json:"imageUrl,omitempty"`
+	BaseName    string   `json:"baseName,omitempty"`    // For uniques/sets: "Shako", "Diadem", etc.
 }
 
 // SearchResponse wraps search results with pagination info
@@ -61,8 +62,9 @@ type ItemRequirements struct {
 type ItemBaseInfo struct {
 	Code       string        `json:"code"`
 	Name       string        `json:"name"`
-	Category   string        `json:"category"` // "armor", "weapon", "misc"
-	ItemType   string        `json:"itemType"` // "helm", "body armor", etc.
+	Category   string        `json:"category"`              // "armor", "weapons", "misc"
+	Subcategory []string     `json:"subcategory,omitempty"` // e.g. ["helms"], ["swords"]
+	ItemType   string        `json:"itemType"`              // "helm", "body armor", etc.
 	Defense    *DefenseRange `json:"defense,omitempty"`
 	MinDamage  *int          `json:"minDamage,omitempty"`
 	MaxDamage  *int          `json:"maxDamage,omitempty"`
@@ -83,6 +85,8 @@ type UniqueItemDetail struct {
 	Name         string           `json:"name"`
 	Type         string           `json:"type"` // Always "unique"
 	Rarity       string           `json:"rarity"` // "unique"
+	Category     string           `json:"category,omitempty"`
+	Subcategory  []string         `json:"subcategory,omitempty"`
 	Base         ItemBaseInfo     `json:"base"`
 	Requirements ItemRequirements `json:"requirements"`
 	Affixes      []ItemAffix      `json:"affixes"`
@@ -97,6 +101,8 @@ type SetItemDetail struct {
 	SetName         string           `json:"setName"`
 	Type            string           `json:"type"` // Always "set"
 	Rarity          string           `json:"rarity"` // "set"
+	Category        string           `json:"category,omitempty"`
+	Subcategory     []string         `json:"subcategory,omitempty"`
 	Base            ItemBaseInfo     `json:"base"`
 	Requirements    ItemRequirements `json:"requirements"`
 	Affixes         []ItemAffix      `json:"affixes"`      // Always active
@@ -138,19 +144,22 @@ type RunewordValidType struct {
 
 // RunewordDetail represents a runeword with all its information
 type RunewordDetail struct {
-	ID             int                 `json:"id"`
-	Name           string              `json:"name"`
-	DisplayName    string              `json:"displayName"` // Properly formatted name
-	Type           string              `json:"type"`        // Always "runeword"
-	Rarity         string              `json:"rarity"`      // "runeword"
-	Runes          []RunewordRune      `json:"runes"`       // Runes with names and icons
-	RuneOrder      string              `json:"runeOrder"`   // "JahIthBer"
-	ValidTypes     []RunewordValidType `json:"validTypes"`  // Item types with names
-	ValidBaseItems []RunewordBaseItem  `json:"validBaseItems,omitempty"` // Actual base items
-	Requirements   ItemRequirements    `json:"requirements"`
-	Affixes        []ItemAffix         `json:"affixes"`
-	LadderOnly     bool                `json:"ladderOnly"`
-	ImageURL       string              `json:"imageUrl,omitempty"`
+	ID             int                    `json:"id"`
+	Name           string                 `json:"name"`
+	DisplayName    string                 `json:"displayName"` // Properly formatted name
+	Type           string                 `json:"type"`        // Always "runeword"
+	Rarity         string                 `json:"rarity"`      // "runeword"
+	Category       string                 `json:"category,omitempty"`
+	Subcategory    []string               `json:"subcategory,omitempty"`
+	Runes          []RunewordRune         `json:"runes"`       // Runes with names and icons
+	RuneOrder      string                 `json:"runeOrder"`   // "JahIthBer"
+	ValidTypes     []RunewordValidType    `json:"validTypes"`  // Item types with names
+	ValidBaseItems []RunewordBaseItem     `json:"validBaseItems,omitempty"` // Actual base items
+	Requirements   ItemRequirements       `json:"requirements"`
+	Affixes        []ItemAffix            `json:"affixes"`
+	AffixesByType  map[string][]ItemAffix `json:"affixesByType,omitempty"` // Per base type stats (e.g., Spirit has different stats for Swords vs Shields)
+	LadderOnly     bool                   `json:"ladderOnly"`
+	ImageURL       string                 `json:"imageUrl,omitempty"`
 }
 
 // RuneDetail represents a rune with all its information
@@ -190,7 +199,8 @@ type BaseItemDetail struct {
 	Name          string           `json:"name"`
 	Type          string           `json:"type"`     // Always "base"
 	Rarity        string           `json:"rarity"`   // "normal"
-	Category      string           `json:"category"` // "armor", "weapon", "misc"
+	Category      string           `json:"category"` // "armor", "weapons", "misc"
+	Subcategory   []string         `json:"subcategory,omitempty"` // e.g. ["helms"], ["swords"]
 	ItemType      string           `json:"itemType"` // "helm", "body armor", etc.
 	Tier          string           `json:"tier,omitempty"`
 	TypeTags      []string         `json:"typeTags,omitempty"`
@@ -309,11 +319,18 @@ type StatCode struct {
 	IsVariable  bool     `json:"isVariable"`            // Whether this stat typically has variable rolls on items
 }
 
+// SubcategoryDTO represents a subcategory within a parent category
+type SubcategoryDTO struct {
+	Code string `json:"code"` // Internal code (e.g., "helms", "swords")
+	Name string `json:"name"` // Display name (e.g., "Helms", "Swords")
+}
+
 // Category represents an item category for filtering
 type Category struct {
-	Code        string `json:"code"`                  // Internal code for filtering (e.g., "helm", "armor", "weapon")
-	Name        string `json:"name"`                  // Display name (e.g., "Helms", "Body Armor", "Weapons")
-	Description string `json:"description,omitempty"` // Brief description of this category
+	Code          string           `json:"code"`                    // Internal code for filtering (e.g., "armor", "weapons")
+	Name          string           `json:"name"`                    // Display name (e.g., "Armor", "Weapons")
+	Description   string           `json:"description,omitempty"`   // Brief description of this category
+	Subcategories []SubcategoryDTO `json:"subcategories,omitempty"` // Subcategories within this category
 }
 
 // Rarity represents an item rarity for filtering
@@ -357,13 +374,14 @@ type CreateSetItemRequest struct {
 
 // CreateRunewordRequest represents the request body for creating/updating a runeword
 type CreateRunewordRequest struct {
-	Name           string          `json:"name"`
-	DisplayName    string          `json:"displayName"`
-	LadderOnly     bool            `json:"ladderOnly"`
-	ValidItemTypes []string        `json:"validItemTypes"`
-	Runes          []string        `json:"runes"`
-	Properties     []PropertyInput `json:"properties"`
-	ImageURL       string          `json:"imageUrl,omitempty"`
+	Name             string                       `json:"name"`
+	DisplayName      string                       `json:"displayName"`
+	LadderOnly       bool                         `json:"ladderOnly"`
+	ValidItemTypes   []string                     `json:"validItemTypes"`
+	Runes            []string                     `json:"runes"`
+	Properties       []PropertyInput              `json:"properties"`
+	PropertiesByType map[string][]PropertyInput   `json:"propertiesByType,omitempty"`
+	ImageURL         string                       `json:"imageUrl,omitempty"`
 }
 
 // CreateRuneRequest represents the request body for creating/updating a rune
