@@ -6,8 +6,10 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	fiberredis "github.com/gofiber/storage/redis/v3"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/api/handlers"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/api/middleware"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/games/d2"
@@ -31,6 +33,9 @@ type Config struct {
 	JWTAudience     string // Expected "aud" claim
 	JWTIssuer       string // Expected "iss" claim
 	AuthDebug       bool   // Debug logging for auth
+	RedisURL        string
+	RateLimitMax    int
+	RateLimitWindow time.Duration
 }
 
 // DefaultConfig returns default server configuration
@@ -40,6 +45,8 @@ func DefaultConfig() *Config {
 		ReadTimeout:     10 * time.Second,
 		WriteTimeout:    10 * time.Second,
 		AllowedOrigins:  "*",
+		RateLimitMax:    100,
+		RateLimitWindow: 1 * time.Minute,
 	}
 }
 
@@ -53,6 +60,7 @@ func NewServer(repo *d2.Repository, config *Config) *Server {
 		ReadTimeout:  config.ReadTimeout,
 		WriteTimeout: config.WriteTimeout,
 		AppName:      "LootStash Catalog API",
+		ProxyHeader:  "Fly-Client-IP",
 	})
 
 	server := &Server{
@@ -76,6 +84,28 @@ func (s *Server) setupMiddleware() {
 		Format:     "${time} ${status} ${method} ${path} ${latency}\n",
 		TimeFormat: "2006-01-02 15:04:05",
 	}))
+
+	// Rate limiter middleware
+	if s.config.RedisURL != "" {
+		store := fiberredis.New(fiberredis.Config{
+			URL: fmt.Sprintf("redis://%s", s.config.RedisURL),
+		})
+
+		s.app.Use(limiter.New(limiter.Config{
+			Max:        s.config.RateLimitMax,
+			Expiration: s.config.RateLimitWindow,
+			KeyGenerator: func(c *fiber.Ctx) string {
+				return c.IP()
+			},
+			LimitReached: func(c *fiber.Ctx) error {
+				return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+					"error":   "too_many_requests",
+					"message": "Rate limit exceeded. Please try again later.",
+				})
+			},
+			Storage: store,
+		}))
+	}
 
 	// CORS middleware
 	s.app.Use(cors.New(cors.Config{

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/api"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/database"
@@ -66,16 +68,33 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Create repository
 	repo := d2.NewRepository(db.Pool())
 
+	// Parse rate limit config
+	rateLimitMax := 100
+	if v := getEnvOrDefault("RATE_LIMIT_MAX", ""); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			rateLimitMax = parsed
+		}
+	}
+	rateLimitWindow := 1 * time.Minute
+	if v := getEnvOrDefault("RATE_LIMIT_WINDOW", ""); v != "" {
+		if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
+			rateLimitWindow = parsed
+		}
+	}
+
 	// Create server config
 	supabaseURL := getEnvOrDefault("SUPABASE_URL", "")
 	config := &api.Config{
-		Port:           port,
-		AllowedOrigins: allowedOrigins,
-		JWTSecret:      getEnvOrDefault("SUPABASE_JWT_SECRET", ""),
-		JWKSURL:        supabaseURL + "/auth/v1/.well-known/jwks.json",
-		JWTAudience:    "authenticated",
-		JWTIssuer:      supabaseURL + "/auth/v1",
-		AuthDebug:      getEnvOrDefault("AUTH_DEBUG", "") == "true",
+		Port:            port,
+		AllowedOrigins:  allowedOrigins,
+		JWTSecret:       getEnvOrDefault("SUPABASE_JWT_SECRET", ""),
+		JWKSURL:         supabaseURL + "/auth/v1/.well-known/jwks.json",
+		JWTAudience:     "authenticated",
+		JWTIssuer:       supabaseURL + "/auth/v1",
+		AuthDebug:       getEnvOrDefault("AUTH_DEBUG", "") == "true",
+		RedisURL:        GetRedisURL(),
+		RateLimitMax:    rateLimitMax,
+		RateLimitWindow: rateLimitWindow,
 	}
 
 	// Create and start server
@@ -95,6 +114,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	PrintSuccess(fmt.Sprintf("Starting server on port %d", port))
 	PrintInfo(fmt.Sprintf("Allowed origins: %s", allowedOrigins))
+	if GetRedisURL() != "" {
+		PrintInfo(fmt.Sprintf("Rate limit: %d requests per %s (Redis: %s)", rateLimitMax, rateLimitWindow, GetRedisURL()))
+	} else {
+		PrintInfo("Rate limiter: disabled (no REDIS_URL)")
+	}
 	PrintInfo("Press Ctrl+C to stop")
 
 	if err := server.Start(); err != nil {
