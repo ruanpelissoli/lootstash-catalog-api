@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -87,8 +88,13 @@ func (s *Server) setupMiddleware() {
 
 	// Rate limiter middleware
 	if s.config.RedisURL != "" {
+		redisURL := s.config.RedisURL
+		if !strings.HasPrefix(redisURL, "redis://") && !strings.HasPrefix(redisURL, "rediss://") {
+			redisURL = fmt.Sprintf("redis://%s", redisURL)
+		}
+
 		store := fiberredis.New(fiberredis.Config{
-			URL: fmt.Sprintf("redis://%s", s.config.RedisURL),
+			URL: redisURL,
 		})
 
 		s.app.Use(limiter.New(limiter.Config{
