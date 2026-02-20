@@ -179,3 +179,27 @@ func D2ItemTypeKey(code string) string {
 func D2ItemTypesKey() string {
 	return "d2:item_types:all"
 }
+
+func D2SearchKey(query string, limit int) string {
+	return fmt.Sprintf("d2:search:%s:%d", query, limit)
+}
+
+func D2StatsKey() string {
+	return "d2:stats:all"
+}
+
+func D2ClassesKey() string {
+	return "d2:classes:all"
+}
+
+func D2QuestItemsKey() string {
+	return "d2:quest_items:all"
+}
+
+func D2QuestItemKey(id int) string {
+	return fmt.Sprintf("d2:quest_item:%d", id)
+}
+
+func D2BasesFilteredKey(category string, runewordID int) string {
+	return fmt.Sprintf("d2:bases:cat:%s:rw:%d", category, runewordID)
+}

@@ -138,6 +138,26 @@ New valid values: `armor`, `weapons`, `jewelry`, `charms`, `runes`, `gems`, `mis
 
 ---
 
+## Caching
+
+All D2 catalog endpoints are cached at two levels:
+
+**Server-side (Redis):** Final JSON DTOs are cached in Redis with tiered TTLs:
+| Endpoint type | TTL | Examples |
+|---|---|---|
+| List endpoints | 24 hours | `/runes`, `/uniques`, `/sets`, `/runewords`, `/gems`, `/bases`, `/quests`, `/classes`, `/stats` |
+| Detail endpoints | 6 hours | `/items/unique/:id`, `/items/set/:id`, `/items/runeword/:id`, `/items/rune/:id`, `/items/gem/:id`, `/items/base/:id`, `/items/quest/:id` |
+| Search results | 1 hour | `/items/search?q=...` |
+| In-memory (no Redis) | N/A | `/categories`, `/rarities` (hardcoded reference data) |
+
+**HTTP layer:** All D2 GET responses include `Cache-Control: public, max-age=300, s-maxage=3600, stale-while-revalidate=86400` (see [Response Headers](#response-headers)). Admin endpoints return `Cache-Control: no-store`.
+
+**Cache invalidation:** Running `seed d2` flushes all `d2:*` Redis keys after import completes. Admin item edits propagate naturally via TTL expiry.
+
+**Graceful degradation:** If Redis is unavailable, all endpoints still work — they just hit PostgreSQL directly on every request.
+
+---
+
 ## Health Check
 
 Check if the API is running.
@@ -1554,9 +1574,16 @@ All errors return a consistent JSON structure:
 
 ### Response Headers
 
-| Header         | Value              |
-|----------------|--------------------|
-| `Content-Type` | `application/json` |
+| Header          | Value              | Applies To |
+|-----------------|--------------------|------------|
+| `Content-Type`  | `application/json` | All responses |
+| `Cache-Control` | `public, max-age=300, s-maxage=3600, stale-while-revalidate=86400` | All D2 GET endpoints (`/api/v1/d2/...`) |
+| `Cache-Control` | `no-store` | Admin endpoints (`/api/v1/admin/...`) |
+
+**Cache-Control breakdown:**
+- `max-age=300` — browsers cache for 5 minutes
+- `s-maxage=3600` — CDN/proxy (Fly.io edge) caches for 1 hour
+- `stale-while-revalidate=86400` — serve stale while revalidating for up to 24 hours
 
 ### CORS
 

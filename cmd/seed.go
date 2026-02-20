@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ruanpelissoli/lootstash-catalog-api/internal/cache"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/database"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/games/d2"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/storage"
@@ -147,6 +148,23 @@ func runSeed(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		PrintInfo("Skipping verification (--skip-verify)")
+	}
+
+	// Invalidate Redis cache after import
+	if !seedDryRun {
+		if redisURL := GetRedisURL(); redisURL != "" {
+			rc, err := cache.NewRedisCache(ctx, redisURL)
+			if err != nil {
+				PrintInfo(fmt.Sprintf("Redis unavailable, skipping cache invalidation: %v", err))
+			} else {
+				if err := rc.DeleteByPattern(ctx, "d2:*"); err != nil {
+					PrintInfo(fmt.Sprintf("Cache invalidation warning: %v", err))
+				} else {
+					PrintSuccess("Redis cache invalidated (d2:* keys flushed)")
+				}
+				rc.Close()
+			}
+		}
 	}
 
 	fmt.Println()

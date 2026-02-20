@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 	"time"
@@ -15,14 +16,17 @@ import (
 	fiberredis "github.com/gofiber/storage/redis/v3"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/api/handlers"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/api/middleware"
+	"github.com/ruanpelissoli/lootstash-catalog-api/internal/api/services"
+	"github.com/ruanpelissoli/lootstash-catalog-api/internal/cache"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/games/d2"
 )
 
 // Server represents the HTTP server
 type Server struct {
-	app    *fiber.App
-	repo   *d2.Repository
-	config *Config
+	app     *fiber.App
+	repo    *d2.Repository
+	service *services.CatalogService
+	config  *Config
 }
 
 // Config holds server configuration
@@ -53,8 +57,8 @@ func DefaultConfig() *Config {
 	}
 }
 
-// NewServer creates a new HTTP server
-func NewServer(repo *d2.Repository, config *Config) *Server {
+// NewServer creates a new HTTP server. redisCache may be nil to disable caching.
+func NewServer(repo *d2.Repository, config *Config, redisCache *cache.RedisCache) *Server {
 	if config == nil {
 		config = DefaultConfig()
 	}
@@ -67,9 +71,10 @@ func NewServer(repo *d2.Repository, config *Config) *Server {
 	})
 
 	server := &Server{
-		app:    app,
-		repo:   repo,
-		config: config,
+		app:     app,
+		repo:    repo,
+		service: services.NewCatalogService(repo, redisCache),
+		config:  config,
 	}
 
 	server.setupMiddleware()
@@ -134,15 +139,17 @@ func (s *Server) setupRoutes() {
 
 	// D2 routes
 	d2Routes := v1.Group("/d2")
+	d2Routes.Use(middleware.CacheHeaders())
 	s.setupD2Routes(d2Routes)
 
 	// Admin routes
 	adminRoutes := v1.Group("/admin/d2")
+	adminRoutes.Use(middleware.NoCacheHeaders())
 	s.setupAdminRoutes(adminRoutes)
 }
 
 func (s *Server) setupD2Routes(router fiber.Router) {
-	itemHandler := handlers.NewItemHandler(s.repo)
+	itemHandler := handlers.NewItemHandler(s.service)
 
 	// Item routes
 	items := router.Group("/items")
@@ -211,8 +218,16 @@ func parseRedisURL(rawURL string) fiberredis.Config {
 
 	parsed, err := url.Parse(rawURL)
 	if err != nil || parsed.Host == "" {
-		// Bare host:port (e.g. "localhost:6379")
-		cfg.Host = rawURL
+		// Bare host:port (e.g. "localhost:6379") — split so fiberredis
+		// doesn't produce "localhost:6379:6379".
+		if host, portStr, splitErr := net.SplitHostPort(rawURL); splitErr == nil {
+			cfg.Host = host
+			if p, convErr := strconv.Atoi(portStr); convErr == nil {
+				cfg.Port = p
+			}
+		} else {
+			cfg.Host = rawURL
+		}
 		return cfg
 	}
 

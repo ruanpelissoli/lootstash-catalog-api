@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/api"
+	"github.com/ruanpelissoli/lootstash-catalog-api/internal/cache"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/database"
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/games/d2"
 	"github.com/spf13/cobra"
@@ -97,8 +98,21 @@ func runServe(cmd *cobra.Command, args []string) error {
 		RateLimitWindow: rateLimitWindow,
 	}
 
+	// Create Redis cache (optional - nil means no caching)
+	var redisCache *cache.RedisCache
+	if GetRedisURL() != "" {
+		rc, err := cache.NewRedisCache(ctx, GetRedisURL())
+		if err != nil {
+			PrintInfo(fmt.Sprintf("Redis cache unavailable: %v (caching disabled)", err))
+		} else {
+			redisCache = rc
+			defer rc.Close()
+			PrintSuccess("Redis cache connected")
+		}
+	}
+
 	// Create and start server
-	server := api.NewServer(repo, config)
+	server := api.NewServer(repo, config, redisCache)
 
 	// Handle graceful shutdown
 	shutdown := make(chan os.Signal, 1)
