@@ -1,8 +1,10 @@
 package api
 
 import (
+	"crypto/tls"
 	"fmt"
-	"strings"
+	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -88,14 +90,9 @@ func (s *Server) setupMiddleware() {
 
 	// Rate limiter middleware
 	if s.config.RedisURL != "" {
-		redisURL := s.config.RedisURL
-		if !strings.HasPrefix(redisURL, "redis://") && !strings.HasPrefix(redisURL, "rediss://") {
-			redisURL = fmt.Sprintf("redis://%s", redisURL)
-		}
+		storeCfg := parseRedisURL(s.config.RedisURL)
 
-		store := fiberredis.New(fiberredis.Config{
-			URL: redisURL,
-		})
+		store := fiberredis.New(storeCfg)
 
 		s.app.Use(limiter.New(limiter.Config{
 			Max:        s.config.RateLimitMax,
@@ -202,6 +199,56 @@ func (s *Server) setupAdminRoutes(router fiber.Router) {
 	items.Post("/:type", adminHandler.CreateItem)
 	items.Put("/:type/:id", adminHandler.UpdateItem)
 	items.Delete("/:type/:id", adminHandler.DeleteItem)
+}
+
+// parseRedisURL parses a Redis URL into a fiberredis.Config.
+// Handles redis:// and rediss:// (TLS) schemes, as well as bare host:port.
+func parseRedisURL(rawURL string) fiberredis.Config {
+	cfg := fiberredis.Config{
+		Host: "127.0.0.1",
+		Port: 6379,
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		// Bare host:port (e.g. "localhost:6379")
+		cfg.Host = rawURL
+		return cfg
+	}
+
+	hostname := parsed.Hostname()
+	if hostname != "" {
+		cfg.Host = hostname
+	}
+
+	if p := parsed.Port(); p != "" {
+		if port, err := strconv.Atoi(p); err == nil {
+			cfg.Port = port
+		}
+	}
+
+	if parsed.User != nil {
+		cfg.Username = parsed.User.Username()
+		if pw, ok := parsed.User.Password(); ok {
+			cfg.Password = pw
+		}
+	}
+
+	// Parse database number from path (e.g. /0)
+	if len(parsed.Path) > 1 {
+		if db, err := strconv.Atoi(parsed.Path[1:]); err == nil {
+			cfg.Database = db
+		}
+	}
+
+	// Enable TLS for rediss:// scheme
+	if parsed.Scheme == "rediss" {
+		cfg.TLSConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+	}
+
+	return cfg
 }
 
 // Start starts the HTTP server
