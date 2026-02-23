@@ -845,28 +845,31 @@ func (h *HTMLImporterV2) computeRunewordBases(ctx context.Context, result *Impor
 			continue
 		}
 
-		// Query bases that have matching type_tags and enough sockets
-		bases, err := h.repo.GetBasesForRunewordByTypeTags(ctx, rw.ValidItemTypes, rw.RuneCount)
-		if err != nil {
-			fmt.Printf("    Warning: runeword base query failed for %s: %v\n", rw.Name, err)
-			continue
-		}
-
-		for _, base := range bases {
-			rb := &RunewordBase{
-				RunewordID:      rw.ID,
-				ItemBaseID:      base.ID,
-				ItemBaseCode:    base.Code,
-				ItemBaseName:    base.Name,
-				Category:        base.Category,
-				MaxSockets:      base.MaxSockets,
-				RequiredSockets: rw.RuneCount,
+		// Query bases per valid type so we can track which type each base matched
+		for _, validType := range rw.ValidItemTypes {
+			bases, err := h.repo.GetBasesForRunewordByTypeTags(ctx, []string{validType}, rw.RuneCount)
+			if err != nil {
+				fmt.Printf("    Warning: runeword base query failed for %s (type %s): %v\n", rw.Name, validType, err)
+				continue
 			}
 
-			if !h.dryRun {
-				h.repo.InsertRunewordBase(ctx, rb)
+			for _, base := range bases {
+				rb := &RunewordBase{
+					RunewordID:      rw.ID,
+					ItemBaseID:      base.ID,
+					ItemBaseCode:    base.Code,
+					ItemBaseName:    base.Name,
+					Category:        base.Category,
+					BaseType:        validType,
+					MaxSockets:      base.MaxSockets,
+					RequiredSockets: rw.RuneCount,
+				}
+
+				if !h.dryRun {
+					h.repo.InsertRunewordBase(ctx, rb)
+				}
+				count++
 			}
-			count++
 		}
 	}
 

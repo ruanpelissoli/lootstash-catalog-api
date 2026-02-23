@@ -74,11 +74,31 @@ func NewReverseTranslator() *ReverseTranslator {
 		_ = code
 	}
 
-	// Sort patterns by regex length (longest first) for specificity
-	sort.Slice(patterns, func(i, j int) bool {
-		if patterns[i].isFixed != patterns[j].isFixed {
-			return patterns[i].isFixed // fixed patterns first (exact matches)
+	// Sort patterns by specificity: fixed > specific > generic.
+	// Patterns with {param} or {skilltab} captures (like "oskill": +{value} To {param})
+	// are generic and must sort AFTER patterns with only literal text (like "mana": +{value} To Mana).
+	// Otherwise the generic pattern matches "+30 To Mana" with param="Mana" before the
+	// specific "mana" pattern can match.
+	hasGenericCapture := func(groups []string) bool {
+		for _, g := range groups {
+			if g == "param" || g == "skilltab" {
+				return true
+			}
 		}
+		return false
+	}
+	sort.Slice(patterns, func(i, j int) bool {
+		// Fixed patterns first (exact text matches)
+		if patterns[i].isFixed != patterns[j].isFixed {
+			return patterns[i].isFixed
+		}
+		// Specific patterns (no generic captures) before generic patterns
+		iGeneric := hasGenericCapture(patterns[i].groups)
+		jGeneric := hasGenericCapture(patterns[j].groups)
+		if iGeneric != jGeneric {
+			return !iGeneric // specific first
+		}
+		// Within same specificity tier, sort by regex length (longest first)
 		return len(patterns[i].regex.String()) > len(patterns[j].regex.String())
 	})
 
@@ -122,7 +142,7 @@ func buildReversePattern(code, template string) *reversePattern {
 		groupName   string
 		replacement string
 	}{
-		{`\{value\}`, "value", `([+-]?\d+(?:-\d+)?(?:\(\d+-\d+\))?)`},
+		{`\{value\}`, "value", `([+-]?\d+(?:-\d+)?(?:\(\d+-\d+\))?|-\(\d+-\d+\))`},
 		{`\{min\}`, "min", `(\d+)`},
 		{`\{max\}`, "max", `(\d+)`},
 		{`\{param\}`, "param", `(.+?)`},
@@ -250,10 +270,20 @@ func (rt *ReverseTranslator) tryPerLevelMatch(text string) (Property, bool) {
 		return Property{}, false
 	}
 
+	// Strip leading "+\s*" that HTML parsing may leave before the parenthesized per-level value.
+	// e.g., "+ (1.5 Per Character Level) 1-148 To Life" → "(1.5 Per Character Level) 1-148 To Life"
+	cleanText := text
+	if strings.HasPrefix(cleanText, "+ ") {
+		cleanText = strings.TrimPrefix(cleanText, "+ ")
+	} else if strings.HasPrefix(cleanText, "+") {
+		cleanText = strings.TrimPrefix(cleanText, "+")
+		cleanText = strings.TrimSpace(cleanText)
+	}
+
 	// Match the per-level format with parenthesized per-level value
 	// e.g., "(1.5 Per Character Level) 1-148 To Life (Based On Character Level)"
 	perLevelRegex := regexp.MustCompile(`(?i)^\(([0-9.]+) Per Character Level\)\s+(\d+)-(\d+)\s+(.+?)\s+\(Based [Oo]n Character Level\)$`)
-	matches := perLevelRegex.FindStringSubmatch(text)
+	matches := perLevelRegex.FindStringSubmatch(cleanText)
 	if matches != nil {
 		statText := matches[4]
 		// Find which per-level code matches this stat text
@@ -282,7 +312,7 @@ func (rt *ReverseTranslator) tryPerLevelMatch(text string) (Property, bool) {
 	// Also match the simpler format without parenthesized per-level value
 	// e.g., "+1 To Maximum Damage (Based On Character Level)"
 	simplePerLevelRegex := regexp.MustCompile(`(?i)^[+]?(-?\d+(?:-\d+)?)\s+(.+?)\s+\(Based [Oo]n Character Level\)$`)
-	simpleMatches := simplePerLevelRegex.FindStringSubmatch(text)
+	simpleMatches := simplePerLevelRegex.FindStringSubmatch(cleanText)
 	if simpleMatches != nil {
 		valueStr := simpleMatches[1]
 		statText := simpleMatches[2]

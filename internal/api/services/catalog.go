@@ -156,6 +156,7 @@ func (s *CatalogService) GetRunewordBases(ctx context.Context, id int) ([]dto.Ru
 				Code:       b.ItemBaseCode,
 				Name:       b.ItemBaseName,
 				Category:   capitalize(b.Category),
+				BaseType:   b.BaseType,
 				MaxSockets: b.MaxSockets,
 			})
 		}
@@ -628,6 +629,7 @@ func (s *CatalogService) convertRunewordToDTO(item *d2.Runeword, bases []d2.Rune
 				Code:       b.ItemBaseCode,
 				Name:       b.ItemBaseName,
 				Category:   capitalize(b.Category),
+				BaseType:   b.BaseType,
 				MaxSockets: b.MaxSockets,
 			})
 		}

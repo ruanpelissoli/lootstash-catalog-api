@@ -142,6 +142,7 @@ func NewPropertyTranslator() *PropertyTranslator {
 			"abs-fire":       "+{value} Fire Absorb",
 			"abs-cold":       "+{value} Cold Absorb",
 			"abs-ltng":       "+{value} Lightning Absorb",
+			"abs-mag":        "+{value} Magic Absorb",
 			"abs-fire%":      "{value}% Fire Absorb",
 			"abs-cold%":      "{value}% Cold Absorb",
 			"abs-ltng%":      "{value}% Lightning Absorb",

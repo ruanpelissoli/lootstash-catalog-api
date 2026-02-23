@@ -313,6 +313,7 @@ type RunewordBase struct {
 	ItemBaseCode    string    `json:"item_base_code"`
 	ItemBaseName    string    `json:"item_base_name"`
 	Category        string    `json:"category"`
+	BaseType        string    `json:"base_type"`
 	MaxSockets      int       `json:"max_sockets"`
 	RequiredSockets int       `json:"required_sockets"`
 	CreatedAt       time.Time `json:"created_at"`

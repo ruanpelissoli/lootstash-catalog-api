@@ -454,9 +454,9 @@ func (r *Repository) GetStatByCode(ctx context.Context, code string) (*Stat, err
 	return &s, nil
 }
 
-// GetAllStatCodes returns all existing stat codes as a set
+// GetAllStatCodes returns all existing stat codes (including aliases) as a set
 func (r *Repository) GetAllStatCodes(ctx context.Context) (map[string]bool, error) {
-	rows, err := r.pool.Query(ctx, `SELECT code FROM d2.stats`)
+	rows, err := r.pool.Query(ctx, `SELECT code, COALESCE(aliases, '{}') FROM d2.stats`)
 	if err != nil {
 		return nil, err
 	}
@@ -465,10 +465,14 @@ func (r *Repository) GetAllStatCodes(ctx context.Context) (map[string]bool, erro
 	result := make(map[string]bool)
 	for rows.Next() {
 		var code string
-		if err := rows.Scan(&code); err != nil {
+		var aliases []string
+		if err := rows.Scan(&code, &aliases); err != nil {
 			return nil, err
 		}
 		result[code] = true
+		for _, alias := range aliases {
+			result[alias] = true
+		}
 	}
 	return result, rows.Err()
 }
@@ -817,20 +821,20 @@ func (r *Repository) ClearRunewordBases(ctx context.Context) error {
 // InsertRunewordBase inserts a runeword-base mapping
 func (r *Repository) InsertRunewordBase(ctx context.Context, rb *RunewordBase) error {
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO d2.runeword_bases (runeword_id, item_base_id, item_base_code, item_base_name, category, max_sockets, required_sockets)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (runeword_id, item_base_id) DO NOTHING`,
-		rb.RunewordID, rb.ItemBaseID, rb.ItemBaseCode, rb.ItemBaseName, rb.Category, rb.MaxSockets, rb.RequiredSockets)
+		INSERT INTO d2.runeword_bases (runeword_id, item_base_id, item_base_code, item_base_name, category, base_type, max_sockets, required_sockets)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (runeword_id, item_base_id, base_type) DO NOTHING`,
+		rb.RunewordID, rb.ItemBaseID, rb.ItemBaseCode, rb.ItemBaseName, rb.Category, rb.BaseType, rb.MaxSockets, rb.RequiredSockets)
 	return err
 }
 
 // GetBasesForRuneword returns all valid base items for a runeword
 func (r *Repository) GetBasesForRuneword(ctx context.Context, runewordID int) ([]RunewordBase, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, runeword_id, item_base_id, item_base_code, item_base_name, category, max_sockets, required_sockets, created_at
+		SELECT id, runeword_id, item_base_id, item_base_code, item_base_name, category, base_type, max_sockets, required_sockets, created_at
 		FROM d2.runeword_bases
 		WHERE runeword_id = $1
-		ORDER BY category, item_base_name`, runewordID)
+		ORDER BY base_type, category, item_base_name`, runewordID)
 	if err != nil {
 		return nil, err
 	}
@@ -839,7 +843,7 @@ func (r *Repository) GetBasesForRuneword(ctx context.Context, runewordID int) ([
 	var bases []RunewordBase
 	for rows.Next() {
 		var rb RunewordBase
-		if err := rows.Scan(&rb.ID, &rb.RunewordID, &rb.ItemBaseID, &rb.ItemBaseCode, &rb.ItemBaseName, &rb.Category, &rb.MaxSockets, &rb.RequiredSockets, &rb.CreatedAt); err != nil {
+		if err := rows.Scan(&rb.ID, &rb.RunewordID, &rb.ItemBaseID, &rb.ItemBaseCode, &rb.ItemBaseName, &rb.Category, &rb.BaseType, &rb.MaxSockets, &rb.RequiredSockets, &rb.CreatedAt); err != nil {
 			return nil, err
 		}
 		bases = append(bases, rb)

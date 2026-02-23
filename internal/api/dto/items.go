@@ -125,6 +125,7 @@ type RunewordBaseItem struct {
 	Code       string `json:"code"`
 	Name       string `json:"name"`
 	Category   string `json:"category"`
+	BaseType   string `json:"baseType"`
 	MaxSockets int    `json:"maxSockets"`
 }
 

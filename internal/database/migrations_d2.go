@@ -360,6 +360,11 @@ ALTER TABLE d2.runewords ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT '
 ALTER TABLE d2.runewords ADD COLUMN IF NOT EXISTS subcategory TEXT[] DEFAULT '{}';
 CREATE INDEX IF NOT EXISTS idx_runewords_category ON d2.runewords(category);
 CREATE INDEX IF NOT EXISTS idx_runewords_subcategory ON d2.runewords USING GIN (subcategory);
+
+-- V5: Per-type runeword base matching
+ALTER TABLE d2.runeword_bases ADD COLUMN IF NOT EXISTS base_type VARCHAR(100) DEFAULT '';
+DROP INDEX IF EXISTS d2.runeword_bases_runeword_id_item_base_id_key;
+CREATE UNIQUE INDEX IF NOT EXISTS runeword_bases_rw_base_type ON d2.runeword_bases(runeword_id, item_base_id, base_type);
 `
 
 func (db *DB) MigrateD2(ctx context.Context) error {
