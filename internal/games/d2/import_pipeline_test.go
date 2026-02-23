@@ -490,6 +490,185 @@ func TestParseAndTranslateRuneword_Spirit(t *testing.T) {
 	}
 }
 
+func TestParseAndTranslateRuneword_Grief(t *testing.T) {
+	parser := NewHTMLItemParser()
+
+	runewords, err := parser.ParseRunewordsFile(catalogPath("runewords.html"))
+	if err != nil {
+		t.Fatalf("ParseRunewordsFile failed: %v", err)
+	}
+
+	var target *HTMLParsedRuneword
+	for i := range runewords {
+		if runewords[i].Name == "Grief" {
+			target = &runewords[i]
+			break
+		}
+	}
+	if target == nil {
+		t.Fatal("Grief not found in runewords.html")
+	}
+
+	// Validate parsed metadata
+	expectedRunes := []string{"Eth", "Tir", "Lo", "Mal", "Ral"}
+	if len(target.Runes) != 5 {
+		t.Fatalf("Runes count = %d, want 5", len(target.Runes))
+	}
+	for i, r := range expectedRunes {
+		if target.Runes[i] != r {
+			t.Errorf("Rune[%d] = %q, want %q", i, target.Runes[i], r)
+		}
+	}
+	if target.SocketCount != 5 {
+		t.Errorf("SocketCount = %d, want 5", target.SocketCount)
+	}
+	if target.ReqLevel != 59 {
+		t.Errorf("ReqLevel = %d, want %d", target.ReqLevel, 59)
+	}
+
+	// Valid types should include both Axes and Swords
+	hasAxes := false
+	hasSwords := false
+	for _, vt := range target.ValidTypes {
+		if strings.Contains(vt, "Axes") {
+			hasAxes = true
+		}
+		if strings.Contains(vt, "Swords") {
+			hasSwords = true
+		}
+	}
+	if !hasAxes {
+		t.Errorf("ValidTypes %v should contain Axes", target.ValidTypes)
+	}
+	if !hasSwords {
+		t.Errorf("ValidTypes %v should contain Swords", target.ValidTypes)
+	}
+
+	// Grief should use flat Properties (same stats for both Axes and Swords),
+	// NOT PropertiesByType (which is for runewords with different stats per type, like Spirit)
+	if target.PropertiesByType != nil {
+		t.Errorf("Grief should have nil PropertiesByType (same stats for all types), got keys: %v", func() []string {
+			var keys []string
+			for k := range target.PropertiesByType {
+				keys = append(keys, k)
+			}
+			return keys
+		}())
+	}
+	if len(target.Properties) == 0 {
+		t.Fatal("Grief should have flat Properties populated")
+	}
+
+	// Reverse-translate and enrich properties
+	props := enrichAll(target.Properties)
+
+	if len(props) == 0 {
+		t.Fatal("Expected properties after translation, got none")
+	}
+
+	// 35% Chance To Cast Level 15 Venom On Striking — proc skill
+	if p := findPropWithParam(props, "hit-skill", "Venom"); p == nil {
+		t.Error("missing property: hit-skill with param=Venom")
+	} else {
+		if p.Min != 35 {
+			t.Errorf("hit-skill Venom: Min=%d, want 35 (chance)", p.Min)
+		}
+		if p.Max != 15 {
+			t.Errorf("hit-skill Venom: Max=%d, want 15 (level)", p.Max)
+		}
+	}
+
+	// +30-40% Increased Attack Speed — ranged stat
+	hasIAS := false
+	for _, p := range props {
+		if (p.Code == "swing1" || p.Code == "swing2" || p.Code == "swing3") && p.Min == 30 && p.Max == 40 {
+			hasIAS = true
+			if !p.HasRange {
+				t.Error("IAS should have range (30-40)")
+			}
+			break
+		}
+	}
+	if !hasIAS {
+		t.Error("missing IAS property (swing1/swing2/swing3 with 30-40)")
+	}
+
+	// Ignore Target's Defense — fixed text, no values
+	if p := findProp(props, "ignore-ac"); p == nil {
+		t.Error("missing property: ignore-ac")
+	} else if p.HasRange {
+		t.Error("ignore-ac should not have range (fixed text)")
+	}
+
+	// Adds 5-30 Fire Damage — fixed damage range
+	if p := findProp(props, "dmg-fire"); p == nil {
+		t.Error("missing property: dmg-fire")
+	} else {
+		if p.Min != 5 || p.Max != 30 {
+			t.Errorf("dmg-fire: Min=%d, Max=%d, want 5/30", p.Min, p.Max)
+		}
+		if p.HasRange {
+			t.Error("dmg-fire should NOT have range (fixed damage per hit)")
+		}
+	}
+
+	// -20-25% To Enemy Poison Resistance — ranged stat
+	if p := findProp(props, "pierce-pois"); p == nil {
+		t.Error("missing property: pierce-pois")
+	} else {
+		if p.Min != 20 || p.Max != 25 {
+			t.Errorf("pierce-pois: Min=%d, Max=%d, want 20/25", p.Min, p.Max)
+		}
+		if !p.HasRange {
+			t.Error("pierce-pois should have range (20-25)")
+		}
+	}
+
+	// 20% Deadly Strike — fixed stat
+	if p := findProp(props, "deadly"); p == nil {
+		t.Error("missing property: deadly")
+	} else {
+		if p.Min != 20 || p.Max != 20 {
+			t.Errorf("deadly: Min=%d, Max=%d, want 20/20", p.Min, p.Max)
+		}
+		if p.HasRange {
+			t.Error("deadly should not have range (fixed stat)")
+		}
+	}
+
+	// Prevent Monster Heal — fixed text
+	if p := findProp(props, "noheal"); p == nil {
+		t.Error("missing property: noheal")
+	}
+
+	// +2 To Mana After Each Kill — fixed stat
+	hasManaKill := false
+	for _, p := range props {
+		if (p.Code == "mana-kill" || p.Code == "mana/kill") && p.Min == 2 && p.Max == 2 {
+			hasManaKill = true
+			break
+		}
+	}
+	if !hasManaKill {
+		t.Error("missing mana after kill property (mana-kill or mana/kill with 2/2)")
+	}
+
+	// +10-15 Life After Each Kill — ranged stat
+	hasLifeKill := false
+	for _, p := range props {
+		if (p.Code == "hp/kill" || p.Code == "heal-kill") && p.Min == 10 && p.Max == 15 {
+			hasLifeKill = true
+			if !p.HasRange {
+				t.Error("life after kill should have range (10-15)")
+			}
+			break
+		}
+	}
+	if !hasLifeKill {
+		t.Error("missing life after kill property (hp/kill or heal-kill with 10-15)")
+	}
+}
+
 // --- Base Items ---
 
 func TestParseAndTranslateBaseItem_PhaseBlade(t *testing.T) {

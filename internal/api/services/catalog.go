@@ -608,6 +608,7 @@ func (s *CatalogService) convertRunewordToDTO(item *d2.Runeword, bases []d2.Rune
 	}
 
 	if len(item.PropertiesByType) > 0 {
+		// Per-type properties exist (e.g., Spirit has different stats for Swords vs Shields)
 		detail.AffixesByType = make(map[string][]dto.ItemAffix)
 		for typeName, props := range item.PropertiesByType {
 			detail.AffixesByType[typeName] = s.convertPropertiesToAffixes(props)
@@ -618,7 +619,18 @@ func (s *CatalogService) convertRunewordToDTO(item *d2.Runeword, bases []d2.Rune
 			}
 		}
 	} else {
-		detail.Affixes = s.convertPropertiesToAffixes(item.Properties)
+		affixes := s.convertPropertiesToAffixes(item.Properties)
+		detail.Affixes = affixes
+
+		// When stats are the same for all types but the runeword has multiple valid types
+		// (e.g., Grief works in both Axes and Swords with identical stats),
+		// populate AffixesByType so the frontend has data for every type tab.
+		if len(item.ValidItemTypes) > 1 {
+			detail.AffixesByType = make(map[string][]dto.ItemAffix, len(item.ValidItemTypes))
+			for _, typeName := range item.ValidItemTypes {
+				detail.AffixesByType[typeName] = affixes
+			}
+		}
 	}
 
 	if len(bases) > 0 {
