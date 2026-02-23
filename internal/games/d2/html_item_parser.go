@@ -533,7 +533,10 @@ func (p *HTMLItemParser) parseRunewordArticle(s *goquery.Selection) HTMLParsedRu
 	if propsDiv != nil {
 		perType := make(map[string][]string)
 		var typeOrder []string
-		currentType := ""
+		// pendingTypes tracks type links that haven't received properties yet.
+		// When multiple <a> links precede a single <span class="z-smallstats">,
+		// the properties are shared by all pending types (e.g., Grief: Axes + Swords).
+		var pendingTypes []string
 
 		propsDiv.Children().Each(func(i int, child *goquery.Selection) {
 			nodeName := goquery.NodeName(child)
@@ -545,23 +548,26 @@ func (p *HTMLItemParser) parseRunewordArticle(s *goquery.Selection) HTMLParsedRu
 					typeName := strings.TrimSpace(child.Text())
 					typeName = strings.Join(strings.Fields(typeName), " ")
 					if typeName != "" {
-						currentType = typeName
-						if _, seen := perType[currentType]; !seen {
-							typeOrder = append(typeOrder, currentType)
-							perType[currentType] = nil
+						if _, seen := perType[typeName]; !seen {
+							typeOrder = append(typeOrder, typeName)
+							perType[typeName] = nil
 						}
+						pendingTypes = append(pendingTypes, typeName)
 					}
 				}
 				return
 			}
 
-			// Collect properties from span.z-smallstats
-			if nodeName == "span" && child.HasClass("z-smallstats") && currentType != "" {
+			// Collect properties from span.z-smallstats and assign to all pending types
+			if nodeName == "span" && child.HasClass("z-smallstats") && len(pendingTypes) > 0 {
 				html, _ := child.Html()
 				lines := p.cleanPropertyHTML(html)
 				if len(lines) > 0 {
-					perType[currentType] = append(perType[currentType], lines...)
+					for _, pt := range pendingTypes {
+						perType[pt] = append(perType[pt], lines...)
+					}
 				}
+				pendingTypes = nil
 			}
 		})
 
@@ -1025,13 +1031,17 @@ func (p *HTMLItemParser) cleanPropertyHTML(html string) []string {
 	html = strings.ReplaceAll(html, "&lt;", "<")
 	html = strings.ReplaceAll(html, "&gt;", ">")
 	html = strings.ReplaceAll(html, "&nbsp;", " ")
-	html = strings.ReplaceAll(html, "&#8211;", "-") // en-dash
+	html = strings.ReplaceAll(html, "&#39;", "'")    // apostrophe
+	html = strings.ReplaceAll(html, "&apos;", "'")   // apostrophe
+	html = strings.ReplaceAll(html, "&#8211;", "-")  // en-dash
 	html = strings.ReplaceAll(html, "\u2013", "-")   // en-dash unicode
 
 	// Split into lines and clean
 	var lines []string
 	for _, line := range strings.Split(html, "\n") {
 		line = strings.TrimSpace(line)
+		// Collapse internal whitespace (e.g., "Level 15  Venom" → "Level 15 Venom")
+		line = strings.Join(strings.Fields(line), " ")
 		if line == "" {
 			continue
 		}

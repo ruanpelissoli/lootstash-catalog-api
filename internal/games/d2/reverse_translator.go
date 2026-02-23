@@ -58,6 +58,8 @@ func NewReverseTranslator() *ReverseTranslator {
 		"stupidity":  "Hit Blinds Target +{value}",
 		"ease":       "Requirements -{value}%",
 		"cheap":      "Reduces All Vendor Prices {value}%",
+		"mana-kill":  "+{value} To Mana After Each Kill",
+		"hp/kill":    "+{value} To Life After Each Kill",
 	}
 	for code, template := range legacyInputFormats {
 		rp := buildReversePattern(code, template)
