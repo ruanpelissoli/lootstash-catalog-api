@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -18,12 +19,13 @@ type RedisCache struct {
 }
 
 func NewRedisCache(ctx context.Context, redisURL string) (*RedisCache, error) {
-	opts, err := redis.ParseURL(fmt.Sprintf("redis://%s", redisURL))
+	// Only prepend scheme if the URL doesn't already have one
+	if !strings.Contains(redisURL, "://") {
+		redisURL = "redis://" + redisURL
+	}
+	opts, err := redis.ParseURL(redisURL)
 	if err != nil {
-		// Try direct connection if URL parsing fails
-		opts = &redis.Options{
-			Addr: redisURL,
-		}
+		return nil, fmt.Errorf("failed to parse Redis URL: %w", err)
 	}
 
 	client := redis.NewClient(opts)

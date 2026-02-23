@@ -390,13 +390,13 @@ func TestParseAndTranslateRuneword_Spirit(t *testing.T) {
 		t.Fatal("Spirit should have PropertiesByType (Swords and Shields have different stats)")
 	}
 
-	swordLines, hasSwords := target.PropertiesByType["4 socket Swords"]
-	shieldLines, hasShields := target.PropertiesByType["4 socket Shields"]
+	swordLines, hasSwords := target.PropertiesByType["Swords"]
+	shieldLines, hasShields := target.PropertiesByType["Shields"]
 	if !hasSwords {
-		t.Fatal("Spirit should have '4 socket Swords' in PropertiesByType")
+		t.Fatal("Spirit should have 'Swords' in PropertiesByType")
 	}
 	if !hasShields {
-		t.Fatal("Spirit should have '4 socket Shields' in PropertiesByType")
+		t.Fatal("Spirit should have 'Shields' in PropertiesByType")
 	}
 
 	// Translate Sword properties

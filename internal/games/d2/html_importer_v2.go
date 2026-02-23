@@ -902,11 +902,7 @@ func (h *HTMLImporterV2) computeRunewordBases(ctx context.Context, result *Impor
 		return fmt.Errorf("get runewords: %w", err)
 	}
 
-	if !h.dryRun {
-		h.repo.ClearRunewordBases(ctx)
-	}
-
-	count := 0
+	var allBases []*RunewordBase
 	for _, rw := range runewords {
 		if len(rw.ValidItemTypes) == 0 {
 			continue
@@ -921,7 +917,7 @@ func (h *HTMLImporterV2) computeRunewordBases(ctx context.Context, result *Impor
 			}
 
 			for _, base := range bases {
-				rb := &RunewordBase{
+				allBases = append(allBases, &RunewordBase{
 					RunewordID:      rw.ID,
 					ItemBaseID:      base.ID,
 					ItemBaseCode:    base.Code,
@@ -930,18 +926,19 @@ func (h *HTMLImporterV2) computeRunewordBases(ctx context.Context, result *Impor
 					BaseType:        validType,
 					MaxSockets:      base.MaxSockets,
 					RequiredSockets: rw.RuneCount,
-				}
-
-				if !h.dryRun {
-					h.repo.InsertRunewordBase(ctx, rb)
-				}
-				count++
+				})
 			}
 		}
 	}
 
-	result.RunewordBases.Imported = count
-	fmt.Printf("    Runeword bases: %d computed\n", count)
+	if !h.dryRun {
+		if err := h.repo.ReplaceRunewordBases(ctx, allBases); err != nil {
+			return fmt.Errorf("replace runeword bases: %w", err)
+		}
+	}
+
+	result.RunewordBases.Imported = len(allBases)
+	fmt.Printf("    Runeword bases: %d computed\n", len(allBases))
 	return nil
 }
 

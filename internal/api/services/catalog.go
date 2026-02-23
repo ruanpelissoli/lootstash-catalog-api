@@ -142,9 +142,9 @@ func (s *CatalogService) GetRuneword(ctx context.Context, id int) (dto.UnifiedIt
 	})
 }
 
-func (s *CatalogService) GetRunewordBases(ctx context.Context, id int) ([]dto.RunewordBaseItem, error) {
-	key := cache.D2RunewordKey(strconv.Itoa(id)) + ":bases"
-	return getOrCache(ctx, s.cache, key, detailTTL, func() ([]dto.RunewordBaseItem, error) {
+func (s *CatalogService) GetRunewordBases(ctx context.Context, id int, baseType string) ([]dto.RunewordBaseItem, error) {
+	// Cache all bases for this runeword, then filter in-memory
+	all, err := getOrCache(ctx, s.cache, cache.D2RunewordKey(strconv.Itoa(id))+":bases", detailTTL, func() ([]dto.RunewordBaseItem, error) {
 		bases, err := s.repo.GetBasesForRuneword(ctx, id)
 		if err != nil {
 			return nil, err
@@ -162,6 +162,18 @@ func (s *CatalogService) GetRunewordBases(ctx context.Context, id int) ([]dto.Ru
 		}
 		return results, nil
 	})
+	if err != nil || baseType == "" {
+		return all, err
+	}
+
+	// Filter by baseType (contains match, e.g. "Spears" matches "5 socket Spears")
+	filtered := make([]dto.RunewordBaseItem, 0)
+	for _, b := range all {
+		if strings.Contains(b.BaseType, baseType) {
+			filtered = append(filtered, b)
+		}
+	}
+	return filtered, nil
 }
 
 func (s *CatalogService) GetRune(ctx context.Context, id int) (dto.UnifiedItemDetail, error) {

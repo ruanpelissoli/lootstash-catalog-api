@@ -133,7 +133,7 @@ func (h *ItemHandler) GetRuneword(c *fiber.Ctx) error {
 }
 
 // GetRunewordBases returns valid base items for a runeword
-// GET /api/d2/items/runeword/:id/bases
+// GET /api/d2/items/runeword/:id/bases?baseType=Spears
 func (h *ItemHandler) GetRunewordBases(c *fiber.Ctx) error {
 	id, err := strconv.Atoi(c.Params("id"))
 	if err != nil {
@@ -144,7 +144,9 @@ func (h *ItemHandler) GetRunewordBases(c *fiber.Ctx) error {
 		})
 	}
 
-	results, err := h.service.GetRunewordBases(c.Context(), id)
+	baseType := c.Query("baseType")
+
+	results, err := h.service.GetRunewordBases(c.Context(), id, baseType)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
 			Error:   "internal_error",

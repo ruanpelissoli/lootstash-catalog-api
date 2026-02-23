@@ -163,13 +163,13 @@ func TestParseRunewordPropertiesByType(t *testing.T) {
 		t.Fatalf("Spirit should have 2 type entries, got %d", len(spirit.PropertiesByType))
 	}
 
-	swordProps, hasSwords := spirit.PropertiesByType["4 socket Swords"]
-	shieldProps, hasShields := spirit.PropertiesByType["4 socket Shields"]
+	swordProps, hasSwords := spirit.PropertiesByType["Swords"]
+	shieldProps, hasShields := spirit.PropertiesByType["Shields"]
 	if !hasSwords {
-		t.Error("Spirit should have '4 socket Swords' in PropertiesByType")
+		t.Error("Spirit should have 'Swords' in PropertiesByType")
 	}
 	if !hasShields {
-		t.Error("Spirit should have '4 socket Shields' in PropertiesByType")
+		t.Error("Spirit should have 'Shields' in PropertiesByType")
 	}
 
 	// Sword and shield properties should differ

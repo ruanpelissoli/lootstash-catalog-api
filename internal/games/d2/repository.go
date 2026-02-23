@@ -812,20 +812,29 @@ func (r *Repository) UpdateRunewordImageURL(ctx context.Context, id int, url str
 
 // RunewordBase operations
 
-// ClearRunewordBases removes all runeword base mappings
-func (r *Repository) ClearRunewordBases(ctx context.Context) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM d2.runeword_bases`)
-	return err
-}
+// ReplaceRunewordBases atomically replaces all runeword base mappings in a single transaction.
+func (r *Repository) ReplaceRunewordBases(ctx context.Context, bases []*RunewordBase) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
 
-// InsertRunewordBase inserts a runeword-base mapping
-func (r *Repository) InsertRunewordBase(ctx context.Context, rb *RunewordBase) error {
-	_, err := r.pool.Exec(ctx, `
-		INSERT INTO d2.runeword_bases (runeword_id, item_base_id, item_base_code, item_base_name, category, base_type, max_sockets, required_sockets)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		ON CONFLICT (runeword_id, item_base_id, base_type) DO NOTHING`,
-		rb.RunewordID, rb.ItemBaseID, rb.ItemBaseCode, rb.ItemBaseName, rb.Category, rb.BaseType, rb.MaxSockets, rb.RequiredSockets)
-	return err
+	if _, err := tx.Exec(ctx, `DELETE FROM d2.runeword_bases`); err != nil {
+		return fmt.Errorf("delete runeword_bases: %w", err)
+	}
+
+	for _, rb := range bases {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO d2.runeword_bases (runeword_id, item_base_id, item_base_code, item_base_name, category, base_type, max_sockets, required_sockets)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			ON CONFLICT (runeword_id, item_base_id, base_type) DO NOTHING`,
+			rb.RunewordID, rb.ItemBaseID, rb.ItemBaseCode, rb.ItemBaseName, rb.Category, rb.BaseType, rb.MaxSockets, rb.RequiredSockets); err != nil {
+			return fmt.Errorf("insert runeword base (runeword_id=%d, base=%s): %w", rb.RunewordID, rb.ItemBaseCode, err)
+		}
+	}
+
+	return tx.Commit(ctx)
 }
 
 // GetBasesForRuneword returns all valid base items for a runeword

@@ -510,8 +510,14 @@ func (p *HTMLItemParser) parseRunewordArticle(s *goquery.Selection) HTMLParsedRu
 	// Extract valid types from filter links
 	s.Find(`a[href*="#filter="]`).Each(func(i int, a *goquery.Selection) {
 		typeName := strings.TrimSpace(a.Text())
-		// Collapse internal whitespace/newlines (e.g., "4 socket\n              Weapons" -> "4 socket Weapons")
+		// Collapse internal whitespace/newlines
 		typeName = strings.Join(strings.Fields(typeName), " ")
+		// Strip socket count prefix (e.g., "4 socket Weapons" -> "Weapons").
+		// The link text includes "N socket " from a nested <span class="z-grey">,
+		// but socket count is already known from the runeword's runes.
+		if idx := strings.Index(strings.ToLower(typeName), "socket "); idx != -1 {
+			typeName = strings.TrimSpace(typeName[idx+len("socket "):])
+		}
 		if typeName != "" {
 			rw.ValidTypes = append(rw.ValidTypes, typeName)
 		}
@@ -547,6 +553,10 @@ func (p *HTMLItemParser) parseRunewordArticle(s *goquery.Selection) HTMLParsedRu
 				if exists && strings.Contains(href, "#filter=") {
 					typeName := strings.TrimSpace(child.Text())
 					typeName = strings.Join(strings.Fields(typeName), " ")
+					// Strip socket count prefix (e.g., "4 socket Shields" -> "Shields")
+					if idx := strings.Index(strings.ToLower(typeName), "socket "); idx != -1 {
+						typeName = strings.TrimSpace(typeName[idx+len("socket "):])
+					}
 					if typeName != "" {
 						if _, seen := perType[typeName]; !seen {
 							typeOrder = append(typeOrder, typeName)
