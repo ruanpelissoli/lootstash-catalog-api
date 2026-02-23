@@ -109,6 +109,73 @@ func (h *HTMLImporterV2) ImportAll(ctx context.Context, catalogPath string) (*Im
 	return result, nil
 }
 
+// ImportOnly runs a selective import for the given types only.
+// Assumes the DB already has bases/runes/etc from a previous full seed.
+func (h *HTMLImporterV2) ImportOnly(ctx context.Context, catalogPath string, types []string) (*ImportResult, error) {
+	result := &ImportResult{}
+
+	h.iconsPath = filepath.Join(catalogPath, "icons")
+	pagesPath := filepath.Join(catalogPath, "pages")
+
+	// Load caches from existing DB data
+	fmt.Println("  Loading lookup caches from database...")
+	if err := h.loadCaches(ctx); err != nil {
+		return nil, fmt.Errorf("failed to load caches: %w", err)
+	}
+	fmt.Printf("    Base names: %d, Rune names: %d, Items with images: %d\n",
+		len(h.baseNameToCode), len(h.runeNameToCode), len(h.existingImageURLs))
+
+	only := make(map[string]bool, len(types))
+	for _, t := range types {
+		only[t] = true
+	}
+
+	if only["bases"] {
+		if err := h.importBases(ctx, pagesPath, result); err != nil {
+			return result, err
+		}
+		h.reloadBaseCache(ctx)
+		if err := h.ensureJewelryAndCharmBases(ctx, result); err != nil {
+			return result, err
+		}
+		h.reloadBaseCache(ctx)
+	}
+
+	if only["misc"] || only["runes"] || only["gems"] {
+		if err := h.importMisc(ctx, pagesPath, result); err != nil {
+			return result, err
+		}
+		h.reloadBaseCache(ctx)
+		h.reloadRuneCache(ctx)
+	}
+
+	if only["uniques"] {
+		if err := h.importUniques(ctx, pagesPath, result); err != nil {
+			return result, err
+		}
+	}
+
+	if only["sets"] {
+		if err := h.importSets(ctx, pagesPath, result); err != nil {
+			return result, err
+		}
+	}
+
+	if only["runewords"] {
+		if err := h.importRunewords(ctx, pagesPath, result); err != nil {
+			return result, err
+		}
+	}
+
+	if only["runeword-bases"] {
+		if err := h.computeRunewordBases(ctx, result); err != nil {
+			return result, err
+		}
+	}
+
+	return result, nil
+}
+
 func (h *HTMLImporterV2) loadCaches(ctx context.Context) error {
 	var err error
 

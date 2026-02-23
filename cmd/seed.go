@@ -19,6 +19,7 @@ var (
 	seedSkipRunewordIcons bool
 	seedSkipVerify        bool
 	seedCatalogPath       string
+	seedOnly              []string
 )
 
 var seedCmd = &cobra.Command{
@@ -48,7 +49,8 @@ Available games:
 Examples:
   supabase db reset && lootstash-catalog seed d2
   lootstash-catalog seed d2 --dry-run
-  lootstash-catalog seed d2 --skip-icons`,
+  lootstash-catalog seed d2 --skip-icons
+  lootstash-catalog seed d2 --only runewords,runeword-bases`,
 	Args: cobra.ExactArgs(1),
 	RunE: runSeed,
 }
@@ -61,6 +63,7 @@ func init() {
 	seedCmd.Flags().BoolVar(&seedSkipRunewordIcons, "skip-runeword-icons", false, "Skip runeword icon generation step")
 	seedCmd.Flags().BoolVar(&seedSkipVerify, "skip-verify", false, "Skip verification step")
 	seedCmd.Flags().StringVar(&seedCatalogPath, "catalog", "catalogs/d2", "Path to catalog folder")
+	seedCmd.Flags().StringSliceVar(&seedOnly, "only", nil, "Only import specific types (comma-separated: bases,uniques,sets,runewords,runeword-bases,runes,gems,misc)")
 }
 
 func runSeed(cmd *cobra.Command, args []string) error {
@@ -82,6 +85,9 @@ func runSeed(cmd *cobra.Command, args []string) error {
 	if seedDryRun {
 		PrintInfo("DRY-RUN MODE - No changes will be made")
 	}
+	if len(seedOnly) > 0 {
+		PrintInfo(fmt.Sprintf("SELECTIVE MODE - Only importing: %s", strings.Join(seedOnly, ", ")))
+	}
 	fmt.Println()
 
 	// Connect to database
@@ -102,18 +108,24 @@ func runSeed(cmd *cobra.Command, args []string) error {
 	PrintSuccess(fmt.Sprintf("Schema '%s' exists", game))
 	fmt.Println()
 
+	selectiveMode := len(seedOnly) > 0
+	repo := d2.NewRepository(db.Pool())
+
 	// Step 1: Migrate schema
-	if err := seedStepMigrate(ctx, db); err != nil {
-		return err
+	if !selectiveMode {
+		if err := seedStepMigrate(ctx, db); err != nil {
+			return err
+		}
+		fmt.Println()
 	}
-	fmt.Println()
 
 	// Step 2: Seed stats
-	repo := d2.NewRepository(db.Pool())
-	if err := seedStepSeedStats(ctx, repo); err != nil {
-		return err
+	if !selectiveMode {
+		if err := seedStepSeedStats(ctx, repo); err != nil {
+			return err
+		}
+		fmt.Println()
 	}
-	fmt.Println()
 
 	// Step 3: HTML Import
 	if err := seedStepHTMLImportV2(ctx, repo); err != nil {
@@ -122,31 +134,31 @@ func runSeed(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// Step 4: Upload icons
-	if !seedSkipIcons {
+	if !selectiveMode && !seedSkipIcons {
 		if err := seedStepUploadIcons(ctx, db); err != nil {
 			return err
 		}
-	} else {
+	} else if seedSkipIcons {
 		PrintInfo("Skipping icon upload (--skip-icons)")
 	}
 	fmt.Println()
 
 	// Step 5: Generate runeword icons
-	if !seedSkipRunewordIcons {
+	if !selectiveMode && !seedSkipRunewordIcons {
 		if err := seedStepGenerateRunewordIcons(ctx, db); err != nil {
 			return err
 		}
-	} else {
+	} else if seedSkipRunewordIcons {
 		PrintInfo("Skipping runeword icon generation (--skip-runeword-icons)")
 	}
 	fmt.Println()
 
 	// Step 6: Verify
-	if !seedSkipVerify {
+	if !selectiveMode && !seedSkipVerify {
 		if err := seedStepVerify(ctx, db); err != nil {
 			return err
 		}
-	} else {
+	} else if seedSkipVerify {
 		PrintInfo("Skipping verification (--skip-verify)")
 	}
 
@@ -257,8 +269,15 @@ func seedStepHTMLImportV2(ctx context.Context, repo *d2.Repository) error {
 	// Create and run V2 importer
 	importer := d2.NewHTMLImporterV2(repo, statRegistry, stor, seedDryRun)
 
-	PrintInfo("Importing all items from HTML...")
-	result, err := importer.ImportAll(ctx, seedCatalogPath)
+	var result *d2.ImportResult
+	var err error
+	if len(seedOnly) > 0 {
+		PrintInfo(fmt.Sprintf("Importing only: %s", strings.Join(seedOnly, ", ")))
+		result, err = importer.ImportOnly(ctx, seedCatalogPath, seedOnly)
+	} else {
+		PrintInfo("Importing all items from HTML...")
+		result, err = importer.ImportAll(ctx, seedCatalogPath)
+	}
 	if err != nil {
 		return fmt.Errorf("HTML import failed: %w", err)
 	}
