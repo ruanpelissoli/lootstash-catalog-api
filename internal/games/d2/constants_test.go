@@ -129,8 +129,8 @@ func TestFilterableStats(t *testing.T) {
 }
 
 func TestStatCategories(t *testing.T) {
-	if len(StatCategories) != 17 {
-		t.Errorf("expected 17 stat categories, got %d", len(StatCategories))
+	if len(StatCategories) != 18 {
+		t.Errorf("expected 18 stat categories, got %d", len(StatCategories))
 	}
 
 	required := []string{"Skills", "Resistances", "Damage", "Other"}

@@ -221,7 +221,7 @@ func TestReverseTranslate_SkilltabResolution(t *testing.T) {
 		{"bow and crossbow", "+3 To Bow and Crossbow Skills", 3, 3},
 		{"fire skills", "+2 To Fire Skills", 2, 2},
 		{"cold skills", "+1 To Cold Skills", 1, 1},
-		{"psychic skills", "+1 To Psychic Skills", 1, 1},
+		{"eldritch skills", "+1 To Eldritch Skills", 1, 1},
 		{"traps", "+3 To Traps", 3, 3},
 	}
 

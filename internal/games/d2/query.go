@@ -20,8 +20,9 @@ type SearchResult struct {
 	ImageURL    string   `json:"imageUrl,omitempty"`
 }
 
-// SearchItems searches across all item types by name
-func (r *Repository) SearchItems(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+// SearchItems searches across all item types by name.
+// If itemType is non-empty, only results of that type are returned.
+func (r *Repository) SearchItems(ctx context.Context, query string, limit int, itemType string) ([]SearchResult, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -33,7 +34,7 @@ func (r *Repository) SearchItems(ctx context.Context, query string, limit int) (
 	pattern := "%" + strings.ToLower(query) + "%"
 
 	// Union query across all item types — categories are pre-computed
-	sql := `
+	baseSql := `
 		WITH all_items AS (
 			-- Unique items
 			SELECT id, name, 'unique' as type,
@@ -100,18 +101,41 @@ func (r *Repository) SearchItems(ctx context.Context, query string, limit int) (
 		)
 		SELECT id, name, type, category, subcategory, base_name, image_url
 		FROM all_items
+	`
+
+	var sql string
+	var args []interface{}
+
+	if itemType != "" {
+		sql = baseSql + `
+		WHERE type = $4
 		ORDER BY
 			CASE
-				WHEN LOWER(name) = LOWER($2) THEN 0  -- Exact match first
-				WHEN LOWER(name) LIKE LOWER($2) || '%' THEN 1  -- Starts with
+				WHEN LOWER(name) = LOWER($2) THEN 0
+				WHEN LOWER(name) LIKE LOWER($2) || '%' THEN 1
 				ELSE 2
 			END,
 			type,
 			name
 		LIMIT $3
-	`
+		`
+		args = []interface{}{pattern, query, limit, itemType}
+	} else {
+		sql = baseSql + `
+		ORDER BY
+			CASE
+				WHEN LOWER(name) = LOWER($2) THEN 0
+				WHEN LOWER(name) LIKE LOWER($2) || '%' THEN 1
+				ELSE 2
+			END,
+			type,
+			name
+		LIMIT $3
+		`
+		args = []interface{}{pattern, query, limit}
+	}
 
-	rows, err := r.pool.Query(ctx, sql, pattern, query, limit)
+	rows, err := r.pool.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search items query failed: %w", err)
 	}
@@ -738,31 +762,37 @@ func (r *Repository) GetAllRunewordsForList(ctx context.Context) ([]Runeword, er
 	return items, rows.Err()
 }
 
-// CountSearchResults counts total results for a search query
-func (r *Repository) CountSearchResults(ctx context.Context, query string) (int, error) {
+// CountSearchResults counts total results for a search query.
+// If itemType is non-empty, only counts results of that type.
+func (r *Repository) CountSearchResults(ctx context.Context, query string, itemType string) (int, error) {
 	pattern := "%" + strings.ToLower(query) + "%"
 
-	sql := `
+	baseSql := `
 		SELECT COUNT(*) FROM (
-			SELECT id FROM d2.unique_items WHERE enabled = true AND LOWER(name) LIKE $1
+			SELECT id, 'unique' as type FROM d2.unique_items WHERE enabled = true AND LOWER(name) LIKE $1
 			UNION ALL
-			SELECT id FROM d2.set_items WHERE LOWER(name) LIKE $1
+			SELECT id, 'set' as type FROM d2.set_items WHERE LOWER(name) LIKE $1
 			UNION ALL
-			SELECT id FROM d2.runewords WHERE complete = true AND LOWER(display_name) LIKE $1
+			SELECT id, 'runeword' as type FROM d2.runewords WHERE complete = true AND LOWER(display_name) LIKE $1
 			UNION ALL
-			SELECT id FROM d2.runes WHERE LOWER(name) LIKE $1
+			SELECT id, 'rune' as type FROM d2.runes WHERE LOWER(name) LIKE $1
 			UNION ALL
-			SELECT id FROM d2.gems WHERE LOWER(name) LIKE $1
+			SELECT id, 'gem' as type FROM d2.gems WHERE LOWER(name) LIKE $1
 			UNION ALL
-			SELECT id FROM d2.item_bases WHERE spawnable = true AND tradable = true AND LOWER(name) LIKE $1
+			SELECT id, 'base' as type FROM d2.item_bases WHERE spawnable = true AND tradable = true AND LOWER(name) LIKE $1
 				AND NOT EXISTS (SELECT 1 FROM d2.gems g WHERE g.code = item_bases.code)
 				AND NOT EXISTS (SELECT 1 FROM d2.runes r WHERE r.code = item_bases.code)
 			UNION ALL
-			SELECT id FROM d2.item_bases WHERE quest_item = true AND LOWER(name) LIKE $1
+			SELECT id, 'quest' as type FROM d2.item_bases WHERE quest_item = true AND LOWER(name) LIKE $1
 		) AS all_items
 	`
 
 	var count int
-	err := r.pool.QueryRow(ctx, sql, pattern).Scan(&count)
+	if itemType != "" {
+		sql := baseSql + ` WHERE type = $2`
+		err := r.pool.QueryRow(ctx, sql, pattern, itemType).Scan(&count)
+		return count, err
+	}
+	err := r.pool.QueryRow(ctx, baseSql, pattern).Scan(&count)
 	return count, err
 }

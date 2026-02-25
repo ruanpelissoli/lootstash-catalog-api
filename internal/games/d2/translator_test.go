@@ -35,7 +35,7 @@ func TestTranslate(t *testing.T) {
 		// Skilltab resolution
 		{"skilltab 0 (bow)", Property{Code: "skilltab", Min: 3, Max: 3, Param: "0"}, "+3 To Bow and Crossbow Skills"},
 		{"skilltab 3 (fire)", Property{Code: "skilltab", Min: 2, Max: 2, Param: "3"}, "+2 To Fire Skills"},
-		{"skilltab 21 (warlock psychic)", Property{Code: "skilltab", Min: 2, Max: 2, Param: "21"}, "+2 To Psychic Skills"},
+		{"skilltab 21 (warlock eldritch)", Property{Code: "skilltab", Min: 2, Max: 2, Param: "21"}, "+2 To Eldritch Skills"},
 		{"skilltab unknown tab", Property{Code: "skilltab", Min: 1, Max: 1, Param: "99"}, "+1 To 99"},
 
 		// Charged/proc skills

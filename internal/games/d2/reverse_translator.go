@@ -109,9 +109,6 @@ func NewReverseTranslator() *ReverseTranslator {
 	for tabNum, tabName := range translator.skillTabs {
 		reverseSkillTabs[strings.ToLower(tabName)] = tabNum
 	}
-	// Add variant mappings for inconsistent HTML names
-	reverseSkillTabs["psychic skill tab"] = 21
-
 	return &ReverseTranslator{patterns: patterns, reverseSkillTabs: reverseSkillTabs}
 }
 

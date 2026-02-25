@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ruanpelissoli/lootstash-catalog-api/internal/api/dto"
@@ -17,12 +18,54 @@ const (
 	searchTTL = 1 * time.Hour
 )
 
+// defaultTabToCode maps game skill tab indices to semantic tree codes.
+// Tab indices match the translator's skillTabs; codes use DB class IDs and tree names
+// so they match what SeedFromClasses() registers in the stats table.
+var defaultTabToCode = map[int]string{
+	// Amazon (tabs 0-2)
+	0: "amazon-Bow and Crossbow",
+	1: "amazon-Passive and Magic",
+	2: "amazon-Javelin and Spear",
+	// Sorceress (tabs 3-5)
+	3: "sorceress-Fire",
+	4: "sorceress-Lightning",
+	5: "sorceress-Cold",
+	// Necromancer (tabs 6-8)
+	6: "necromancer-Curses",
+	7: "necromancer-Poison and Bone",
+	8: "necromancer-Summoning",
+	// Paladin (tabs 9-11)
+	9:  "paladin-Combat Skills",
+	10: "paladin-Offensive Auras",
+	11: "paladin-Defensive Auras",
+	// Barbarian (tabs 12-14)
+	12: "barbarian-Combat Skills",
+	13: "barbarian-Combat Masteries",
+	14: "barbarian-Warcries",
+	// Druid (tabs 15-17)
+	15: "druid-Summoning",
+	16: "druid-Shape Shifting",
+	17: "druid-Elemental",
+	// Assassin (tabs 18-20)
+	18: "assassin-Traps",
+	19: "assassin-Shadow Disciplines",
+	20: "assassin-Martial Arts",
+	// Warlock (tabs 21-23)
+	21: "warlock-Eldritch",
+	22: "warlock-Demon",
+	23: "warlock-Chaos",
+}
+
 // CatalogService provides cached access to catalog data.
 // When cache is nil, all methods fall through to the database.
 type CatalogService struct {
 	repo       *d2.Repository
 	cache      *cache.RedisCache
 	translator *d2.PropertyTranslator
+
+	skillOnce   sync.Once
+	tabToCode   map[int]string    // tab index → semantic tree code (e.g. 3 → "sorceress-Fire")
+	skillToCode map[string]string // skill name → semantic skill code (e.g. "Fireball" → "sorceress-Fire-Fireball")
 }
 
 func NewCatalogService(repo *d2.Repository, c *cache.RedisCache) *CatalogService {
@@ -31,6 +74,52 @@ func NewCatalogService(repo *d2.Repository, c *cache.RedisCache) *CatalogService
 		cache:      c,
 		translator: d2.DefaultTranslator,
 	}
+}
+
+// initSkillMaps lazily initializes tabToCode (hardcoded) and skillToCode (from DB).
+// Tab-to-code mapping is hardcoded because DB array order doesn't match game tab order.
+// Skill-to-code mapping is built from DB since it doesn't depend on tab ordering.
+func (s *CatalogService) initSkillMaps() {
+	s.skillOnce.Do(func() {
+		s.tabToCode = defaultTabToCode
+		s.skillToCode = make(map[string]string)
+
+		classes, err := s.repo.GetAllClasses(context.Background())
+		if err != nil {
+			return
+		}
+
+		for _, c := range classes {
+			for _, tree := range c.SkillTrees {
+				treeCode := c.ID + "-" + tree.Name
+				for _, skillName := range tree.Skills {
+					s.skillToCode[skillName] = treeCode + "-" + skillName
+				}
+			}
+		}
+	})
+}
+
+// resolveSkillCode resolves skilltab/skill/oskill property codes to semantic codes.
+// Returns the resolved code, or empty string if not a skill-related code.
+func (s *CatalogService) resolveSkillCode(propCode, param string) string {
+	s.initSkillMaps()
+
+	switch propCode {
+	case "skilltab":
+		tabIdx, err := strconv.Atoi(param)
+		if err != nil {
+			return ""
+		}
+		if code, ok := s.tabToCode[tabIdx]; ok {
+			return code
+		}
+	case "skill", "oskill":
+		if code, ok := s.skillToCode[param]; ok {
+			return code
+		}
+	}
+	return ""
 }
 
 // Repo exposes the repository for use by admin handlers.
@@ -61,9 +150,13 @@ func getOrCache[T any](ctx context.Context, c *cache.RedisCache, key string, ttl
 
 // --- Search ---
 
-func (s *CatalogService) Search(ctx context.Context, query string, limit int) (dto.SearchResponse, error) {
-	return getOrCache(ctx, s.cache, cache.D2SearchKey(query, limit), searchTTL, func() (dto.SearchResponse, error) {
-		results, err := s.repo.SearchItems(ctx, query, limit)
+func (s *CatalogService) Search(ctx context.Context, query string, limit int, itemType string) (dto.SearchResponse, error) {
+	cacheKey := cache.D2SearchKey(query, limit)
+	if itemType != "" {
+		cacheKey = cacheKey + ":type:" + itemType
+	}
+	return getOrCache(ctx, s.cache, cacheKey, searchTTL, func() (dto.SearchResponse, error) {
+		results, err := s.repo.SearchItems(ctx, query, limit, itemType)
 		if err != nil {
 			return dto.SearchResponse{}, err
 		}
@@ -86,7 +179,7 @@ func (s *CatalogService) Search(ctx context.Context, query string, limit int) (d
 			})
 		}
 
-		totalCount, _ := s.repo.CountSearchResults(ctx, query)
+		totalCount, _ := s.repo.CountSearchResults(ctx, query, itemType)
 
 		return dto.SearchResponse{
 			Items:      items,
@@ -787,7 +880,11 @@ func (s *CatalogService) convertPropertiesToAffixes(props []d2.Property) []dto.I
 				}
 				altCode := alt.Code
 				if alt.Param != "" {
-					altCode = alt.Code + "-" + slugifyParam(alt.Param)
+					if resolved := s.resolveSkillCode(alt.Code, alt.Param); resolved != "" {
+						altCode = resolved
+					} else {
+						altCode = alt.Code + "-" + slugifyParam(alt.Param)
+					}
 				}
 				opt := dto.AffixOption{
 					Value: altCode,
@@ -815,7 +912,11 @@ func (s *CatalogService) convertPropertiesToAffixes(props []d2.Property) []dto.I
 
 		code := prop.Code
 		if prop.Param != "" {
-			code = prop.Code + "-" + slugifyParam(prop.Param)
+			if resolved := s.resolveSkillCode(prop.Code, prop.Param); resolved != "" {
+				code = resolved
+			} else {
+				code = prop.Code + "-" + slugifyParam(prop.Param)
+			}
 		}
 
 		affix := dto.ItemAffix{

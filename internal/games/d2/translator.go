@@ -281,9 +281,9 @@ func NewPropertyTranslator() *PropertyTranslator {
 			19: "Shadow Disciplines",
 			20: "Martial Arts",
 			// Warlock (tabs 21-23)
-			21: "Psychic Skills",
-			22: "Demonic Binding Skills",
-			23: "Arts of Chaos Skills",
+			21: "Eldritch Skills",
+			22: "Demon Skills",
+			23: "Chaos Skills",
 		},
 	}
 }

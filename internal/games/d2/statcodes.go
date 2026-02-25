@@ -15,6 +15,7 @@ type StatCodeInfo struct {
 var StatCategories = []string{
 	"Skills",
 	"Skill Trees",
+	"Individual Skills",
 	"Attributes",
 	"Life & Mana",
 	"Speed",
@@ -36,56 +37,8 @@ var StatCategories = []string{
 // These are the stats users typically search for when looking for items.
 func FilterableStats() []StatCodeInfo {
 	return []StatCodeInfo{
-		// Skills
+		// Skills (class-specific and tree-specific skills are seeded from d2.classes via SeedFromClasses)
 		{Code: "allskills", Name: "All Skills", Description: "+{value} To All Skills", Category: "Skills", IsVariable: true},
-		{Code: "ama", Name: "Amazon Skills", Description: "+{value} To Amazon Skill Levels", Category: "Skills", IsVariable: true},
-		{Code: "sor", Name: "Sorceress Skills", Description: "+{value} To Sorceress Skill Levels", Category: "Skills", IsVariable: true},
-		{Code: "nec", Name: "Necromancer Skills", Description: "+{value} To Necromancer Skill Levels", Category: "Skills", IsVariable: true},
-		{Code: "pal", Name: "Paladin Skills", Description: "+{value} To Paladin Skill Levels", Category: "Skills", IsVariable: true},
-		{Code: "bar", Name: "Barbarian Skills", Description: "+{value} To Barbarian Skill Levels", Category: "Skills", IsVariable: true},
-		{Code: "dru", Name: "Druid Skills", Description: "+{value} To Druid Skill Levels", Category: "Skills", IsVariable: true},
-		{Code: "ass", Name: "Assassin Skills", Description: "+{value} To Assassin Skill Levels", Category: "Skills", IsVariable: true},
-		{Code: "war", Name: "Warlock Skills", Description: "+{value} To Warlock Skill Levels", Category: "Skills", IsVariable: true},
-
-		// Skill Trees - Amazon
-		{Code: "ama-bow", Name: "Bow and Crossbow", Description: "+{value} To Bow and Crossbow Skills (Amazon Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "ama-passive", Name: "Passive and Magic", Description: "+{value} To Passive and Magic Skills (Amazon Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "ama-javelin", Name: "Javelin and Spear", Description: "+{value} To Javelin and Spear Skills (Amazon Only)", Category: "Skill Trees", IsVariable: true},
-
-		// Skill Trees - Sorceress
-		{Code: "sor-fire", Name: "Fire Skills", Description: "+{value} To Fire Skills (Sorceress Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "sor-lightning", Name: "Lightning Skills", Description: "+{value} To Lightning Skills (Sorceress Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "sor-cold", Name: "Cold Skills", Description: "+{value} To Cold Skills (Sorceress Only)", Category: "Skill Trees", IsVariable: true},
-
-		// Skill Trees - Necromancer
-		{Code: "nec-curses", Name: "Curses", Description: "+{value} To Curses (Necromancer Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "nec-poisonbone", Name: "Poison and Bone", Description: "+{value} To Poison and Bone Skills (Necromancer Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "nec-summon", Name: "Summoning Skills", Description: "+{value} To Summoning Skills (Necromancer Only)", Category: "Skill Trees", IsVariable: true},
-
-		// Skill Trees - Paladin
-		{Code: "pal-combat", Name: "Combat Skills", Description: "+{value} To Combat Skills (Paladin Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "pal-offensive", Name: "Offensive Auras", Description: "+{value} To Offensive Auras (Paladin Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "pal-defensive", Name: "Defensive Auras", Description: "+{value} To Defensive Auras (Paladin Only)", Category: "Skill Trees", IsVariable: true},
-
-		// Skill Trees - Barbarian
-		{Code: "bar-combat", Name: "Combat Skills", Description: "+{value} To Combat Skills (Barbarian Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "bar-masteries", Name: "Masteries", Description: "+{value} To Masteries (Barbarian Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "bar-warcries", Name: "Warcries", Description: "+{value} To Warcries (Barbarian Only)", Category: "Skill Trees", IsVariable: true},
-
-		// Skill Trees - Druid
-		{Code: "dru-summon", Name: "Summoning Skills", Description: "+{value} To Summoning Skills (Druid Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "dru-shapeshifting", Name: "Shape Shifting", Description: "+{value} To Shape Shifting Skills (Druid Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "dru-elemental", Name: "Elemental Skills", Description: "+{value} To Elemental Skills (Druid Only)", Category: "Skill Trees", IsVariable: true},
-
-		// Skill Trees - Assassin
-		{Code: "ass-traps", Name: "Traps", Description: "+{value} To Traps (Assassin Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "ass-shadow", Name: "Shadow Disciplines", Description: "+{value} To Shadow Disciplines (Assassin Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "ass-martial", Name: "Martial Arts", Description: "+{value} To Martial Arts (Assassin Only)", Category: "Skill Trees", IsVariable: true},
-
-		// Skill Trees - Warlock
-		{Code: "war-psychic", Name: "Psychic Skills", Description: "+{value} To Psychic Skills (Warlock Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "war-demonic", Name: "Demonic Binding", Description: "+{value} To Demonic Binding Skills (Warlock Only)", Category: "Skill Trees", IsVariable: true},
-		{Code: "war-chaos", Name: "Arts of Chaos", Description: "+{value} To Arts of Chaos Skills (Warlock Only)", Category: "Skill Trees", IsVariable: true},
 
 		// Attributes
 		{Code: "str", Name: "Strength", Description: "+{value} To Strength", Category: "Attributes", IsVariable: true},

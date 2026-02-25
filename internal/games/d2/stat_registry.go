@@ -129,6 +129,27 @@ func (sr *StatRegistry) SeedFromClasses(ctx context.Context) (int, error) {
 				seeded++
 				baseOrder++
 			}
+
+			// Individual skill codes (e.g., "sor-Fire-Fireball", "pal-Combat-Zeal")
+			for _, skillName := range tree.Skills {
+				skillCode := classCode + "-" + tree.Name + "-" + skillName
+				if !sr.known[skillCode] {
+					stat := &Stat{
+						Code:        skillCode,
+						Name:        skillName,
+						DisplayText: fmt.Sprintf("+{value} To %s (%s Only)", skillName, c.Name),
+						Category:    "Individual Skills",
+						IsVariable:  true,
+						SortOrder:   baseOrder,
+					}
+					if err := sr.repo.UpsertStat(ctx, stat); err != nil {
+						return seeded, fmt.Errorf("seed skill stat %s: %w", skillCode, err)
+					}
+					sr.known[skillCode] = true
+					seeded++
+					baseOrder++
+				}
+			}
 		}
 	}
 

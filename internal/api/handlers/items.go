@@ -48,7 +48,9 @@ func (h *ItemHandler) Search(c *fiber.Ctx) error {
 		limit = 100
 	}
 
-	result, err := h.service.Search(c.Context(), query, limit)
+	itemType := strings.ToLower(c.Query("type"))
+
+	result, err := h.service.Search(c.Context(), query, limit, itemType)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
 			Error:   "internal_error",
