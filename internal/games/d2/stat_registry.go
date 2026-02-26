@@ -168,6 +168,11 @@ func (sr *StatRegistry) EnsureStat(ctx context.Context, prop Property) error {
 		return nil
 	}
 
+	// Skip codes that are aliases of a known filterable stat
+	if aliasOfFilterableStat[prop.Code] {
+		return nil
+	}
+
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 

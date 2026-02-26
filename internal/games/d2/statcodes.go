@@ -222,6 +222,18 @@ func ParamLabels() map[string]string {
 	return labels
 }
 
+// aliasOfFilterableStat maps alias codes back to true, so we can skip them
+// during auto-discovery in EnsureStat (they're already covered by their parent stat).
+var aliasOfFilterableStat = func() map[string]bool {
+	m := make(map[string]bool)
+	for _, st := range FilterableStats() {
+		for _, alias := range st.Aliases {
+			m[alias] = true
+		}
+	}
+	return m
+}()
+
 // parametricStatCodes are codes that are dynamic/parametric and don't belong
 // in a fixed filter list (they use param to specify the actual skill/effect),
 // or are internal component codes that combine into other display stats.

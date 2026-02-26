@@ -543,8 +543,20 @@ func (s *CatalogService) GetAllStats(ctx context.Context) ([]dto.StatCode, error
 		// Build param label lookup from hardcoded stats
 		paramLabels := d2.ParamLabels()
 
+		// Build alias lookup to filter out orphaned alias entries
+		aliasSet := make(map[string]bool)
+		for _, st := range stats {
+			for _, alias := range st.Aliases {
+				aliasSet[alias] = true
+			}
+		}
+
 		results := make([]dto.StatCode, 0, len(stats))
 		for _, st := range stats {
+			// Skip stats whose code is an alias of another stat
+			if aliasSet[st.Code] {
+				continue
+			}
 			results = append(results, dto.StatCode{
 				Code:        st.Code,
 				Name:        st.Name,
