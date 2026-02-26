@@ -9,6 +9,7 @@ type StatCodeInfo struct {
 	Category    string   // Category for grouping in UI
 	Aliases     []string // Alternative codes that map to this stat
 	IsVariable  bool     // Whether this stat typically has variable rolls
+	ParamLabel  string   // Label for the {param} input field (e.g., "Seconds"); empty means no param needed
 }
 
 // StatCategories defines the ordering of stat categories in the UI
@@ -97,7 +98,7 @@ func FilterableStats() []StatCodeInfo {
 		{Code: "dmg-fire", Name: "Adds Fire Damage", Description: "Adds {min}-{max} Fire Damage", Category: "Damage", Aliases: []string{"fire-min", "fire-max"}, IsVariable: true},
 		{Code: "dmg-cold", Name: "Adds Cold Damage", Description: "Adds {min}-{max} Cold Damage", Category: "Damage", Aliases: []string{"cold-min", "cold-max", "cold-len"}, IsVariable: true},
 		{Code: "dmg-ltng", Name: "Adds Lightning Damage", Description: "Adds {min}-{max} Lightning Damage", Category: "Damage", Aliases: []string{"ltng-min", "ltng-max"}, IsVariable: true},
-		{Code: "dmg-pois", Name: "Poison Damage", Description: "+{value} Poison Damage Over {param} Seconds", Category: "Damage", Aliases: []string{"pois-min", "pois-max", "pois-len"}, IsVariable: true},
+		{Code: "dmg-pois", Name: "Poison Damage", Description: "+{value} Poison Damage Over {param} Seconds", Category: "Damage", Aliases: []string{"pois-min", "pois-max", "pois-len"}, IsVariable: true, ParamLabel: "Seconds"},
 		{Code: "dmg-mag", Name: "Adds Magic Damage", Description: "Adds {min}-{max} Magic Damage", Category: "Damage", IsVariable: true},
 		{Code: "dmg-elem", Name: "Adds Elemental Damage", Description: "Adds Elemental Damage", Category: "Damage", IsVariable: true},
 		{Code: "dmg-demon", Name: "Damage To Demons", Description: "+{value}% Damage To Demons", Category: "Damage", IsVariable: true},
@@ -208,6 +209,17 @@ func FilterableStats() []StatCodeInfo {
 		{Code: "cheap", Name: "Reduces Vendor Prices", Description: "Reduces All Vendor Prices {value}%", Category: "Other", IsVariable: true},
 		{Code: "teleport", Name: "Teleport", Description: "+1 To Teleport", Category: "Other", IsVariable: false},
 	}
+}
+
+// ParamLabels returns a map of stat code -> param label for stats that need a {param} input.
+func ParamLabels() map[string]string {
+	labels := make(map[string]string)
+	for _, st := range FilterableStats() {
+		if st.ParamLabel != "" {
+			labels[st.Code] = st.ParamLabel
+		}
+	}
+	return labels
 }
 
 // parametricStatCodes are codes that are dynamic/parametric and don't belong

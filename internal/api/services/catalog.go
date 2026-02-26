@@ -534,10 +534,14 @@ func (s *CatalogService) GetAllStats(ctx context.Context) ([]dto.StatCode, error
 					Category:    st.Category,
 					Aliases:     st.Aliases,
 					IsVariable:  st.IsVariable,
+					ParamLabel:  st.ParamLabel,
 				})
 			}
 			return results, nil
 		}
+
+		// Build param label lookup from hardcoded stats
+		paramLabels := d2.ParamLabels()
 
 		results := make([]dto.StatCode, 0, len(stats))
 		for _, st := range stats {
@@ -548,6 +552,7 @@ func (s *CatalogService) GetAllStats(ctx context.Context) ([]dto.StatCode, error
 				Category:    st.Category,
 				Aliases:     st.Aliases,
 				IsVariable:  st.IsVariable,
+				ParamLabel:  paramLabels[st.Code],
 			})
 		}
 		return results, nil

@@ -318,6 +318,7 @@ type StatCode struct {
 	Category    string   `json:"category"`              // Category for grouping in UI (e.g., "Speed", "Resistances", "Damage")
 	Aliases     []string `json:"aliases,omitempty"`     // Alternative codes that map to this stat
 	IsVariable  bool     `json:"isVariable"`            // Whether this stat typically has variable rolls on items
+	ParamLabel  string   `json:"paramLabel,omitempty"`  // Label for second input when stat needs a {param} value (e.g., "Seconds" for poison duration)
 }
 
 // SubcategoryDTO represents a subcategory within a parent category
