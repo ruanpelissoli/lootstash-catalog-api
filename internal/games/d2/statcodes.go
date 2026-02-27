@@ -98,7 +98,7 @@ func FilterableStats() []StatCodeInfo {
 		{Code: "dmg-fire", Name: "Adds Fire Damage", Description: "Adds {min}-{max} Fire Damage", Category: "Damage", Aliases: []string{"fire-min", "fire-max"}, IsVariable: true},
 		{Code: "dmg-cold", Name: "Adds Cold Damage", Description: "Adds {min}-{max} Cold Damage", Category: "Damage", Aliases: []string{"cold-min", "cold-max", "cold-len"}, IsVariable: true},
 		{Code: "dmg-ltng", Name: "Adds Lightning Damage", Description: "Adds {min}-{max} Lightning Damage", Category: "Damage", Aliases: []string{"ltng-min", "ltng-max"}, IsVariable: true},
-		{Code: "dmg-pois", Name: "Poison Damage", Description: "+{value} Poison Damage Over {param} Seconds", Category: "Damage", Aliases: []string{"pois-min", "pois-max", "pois-len"}, IsVariable: true, ParamLabel: "Seconds"},
+		{Code: "dmg-pois", Name: "Poison Damage Over Seconds", Description: "+{value} Poison Damage Over {param} Seconds", Category: "Damage", Aliases: []string{"pois-min", "pois-max", "pois-len"}, IsVariable: true, ParamLabel: "Seconds"},
 		{Code: "dmg-mag", Name: "Adds Magic Damage", Description: "Adds {min}-{max} Magic Damage", Category: "Damage", IsVariable: true},
 		{Code: "dmg-elem", Name: "Adds Elemental Damage", Description: "Adds Elemental Damage", Category: "Damage", IsVariable: true},
 		{Code: "dmg-demon", Name: "Damage To Demons", Description: "+{value}% Damage To Demons", Category: "Damage", IsVariable: true},
