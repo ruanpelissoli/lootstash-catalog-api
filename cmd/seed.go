@@ -111,6 +111,17 @@ func runSeed(cmd *cobra.Command, args []string) error {
 	selectiveMode := len(seedOnly) > 0
 	repo := d2.NewRepository(db.Pool())
 
+	// Check if "stats" is in the --only list
+	seedOnlyStats := false
+	if selectiveMode {
+		for _, s := range seedOnly {
+			if s == "stats" {
+				seedOnlyStats = true
+				break
+			}
+		}
+	}
+
 	// Step 1: Migrate schema
 	if !selectiveMode {
 		if err := seedStepMigrate(ctx, db); err != nil {
@@ -120,7 +131,7 @@ func runSeed(cmd *cobra.Command, args []string) error {
 	}
 
 	// Step 2: Seed stats
-	if !selectiveMode {
+	if !selectiveMode || seedOnlyStats {
 		if err := seedStepSeedStats(ctx, repo); err != nil {
 			return err
 		}
