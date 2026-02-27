@@ -594,9 +594,9 @@ func (p *HTMLItemParser) parseRunewordArticle(s *goquery.Selection) HTMLParsedRu
 		}
 
 		if len(typeOrder) <= 1 || allSame {
-			// Single type or all identical — use flat Properties
-			for _, tn := range typeOrder {
-				rw.Properties = append(rw.Properties, perType[tn]...)
+			// Single type or all identical — use flat Properties (take from first type only)
+			if len(typeOrder) > 0 {
+				rw.Properties = perType[typeOrder[0]]
 			}
 		} else {
 			// Different stats per type
