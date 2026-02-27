@@ -138,11 +138,13 @@ func runSeed(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 	}
 
-	// Step 3: HTML Import
-	if err := seedStepHTMLImportV2(ctx, repo); err != nil {
-		return err
+	// Step 3: HTML Import (skip when only seeding stats)
+	if !seedOnlyStats {
+		if err := seedStepHTMLImportV2(ctx, repo); err != nil {
+			return err
+		}
+		fmt.Println()
 	}
-	fmt.Println()
 
 	// Step 4: Upload icons
 	if !selectiveMode && !seedSkipIcons {

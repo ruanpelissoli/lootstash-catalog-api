@@ -48,6 +48,18 @@ func (sr *StatRegistry) SeedFromFilterableStats(ctx context.Context) (int, error
 	}
 
 	stats := FilterableStats()
+
+	// Clean up orphaned alias rows (aliases that were previously inserted as standalone stats)
+	var aliasCodes []string
+	for _, sc := range stats {
+		aliasCodes = append(aliasCodes, sc.Aliases...)
+	}
+	if deleted, err := sr.repo.DeleteStatsByCodes(ctx, aliasCodes); err != nil {
+		return 0, fmt.Errorf("cleanup orphaned alias stats: %w", err)
+	} else if deleted > 0 {
+		fmt.Printf("  Cleaned up %d orphaned alias stats\n", deleted)
+	}
+
 	seeded := 0
 	for i, sc := range stats {
 		sortOrder := categoryOrder[sc.Category] + i

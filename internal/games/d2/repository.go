@@ -398,6 +398,18 @@ func (r *Repository) UpsertGem(ctx context.Context, g *Gem) error {
 // Stat operations
 
 // UpsertStat inserts or updates a stat in the registry
+// DeleteStatsByCodes deletes stats whose code is in the given list.
+func (r *Repository) DeleteStatsByCodes(ctx context.Context, codes []string) (int64, error) {
+	if len(codes) == 0 {
+		return 0, nil
+	}
+	tag, err := r.pool.Exec(ctx, `DELETE FROM d2.stats WHERE code = ANY($1)`, codes)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 func (r *Repository) UpsertStat(ctx context.Context, s *Stat) error {
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO d2.stats (code, name, display_text, category, is_variable, is_parametric, aliases, sort_order)
