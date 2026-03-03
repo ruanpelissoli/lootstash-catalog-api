@@ -1191,7 +1191,7 @@ func (r *Repository) GetAllClasses(ctx context.Context) ([]Class, error) {
 			return nil, err
 		}
 		if len(skillTreesJSON) > 0 {
-			json.Unmarshal(skillTreesJSON, &c.SkillTrees)
+			_ = json.Unmarshal(skillTreesJSON, &c.SkillTrees)
 		}
 		classes = append(classes, c)
 	}
@@ -1211,7 +1211,7 @@ func (r *Repository) GetClass(ctx context.Context, id string) (*Class, error) {
 		return nil, fmt.Errorf("get class failed: %w", err)
 	}
 	if len(skillTreesJSON) > 0 {
-		json.Unmarshal(skillTreesJSON, &c.SkillTrees)
+		_ = json.Unmarshal(skillTreesJSON, &c.SkillTrees)
 	}
 	return &c, nil
 }
