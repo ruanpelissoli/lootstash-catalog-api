@@ -376,7 +376,7 @@ func (t *PropertyTranslator) Translate(prop Property) string {
 	// Handle skill tab placeholder
 	if strings.Contains(result, "{skilltab}") && prop.Param != "" {
 		tabNum := 0
-		fmt.Sscanf(prop.Param, "%d", &tabNum)
+		_, _ = fmt.Sscanf(prop.Param, "%d", &tabNum)
 		if tabName, ok := t.skillTabs[tabNum]; ok {
 			result = strings.ReplaceAll(result, "{skilltab}", tabName)
 		} else {

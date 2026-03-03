@@ -300,12 +300,14 @@ func (h *HTMLImporterV2) importBases(ctx context.Context, pagesPath string, resu
 		for _, tc := range []struct{ code, name string }{{itemType, item.TypeName}, {itemType2, item.TypeName2}} {
 			if tc.code != "" && !ensuredTypes[tc.code] {
 				if !h.dryRun {
-					h.repo.UpsertItemType(ctx, &ItemType{
+					if err := h.repo.UpsertItemType(ctx, &ItemType{
 						Code:       tc.code,
 						Name:       tc.name,
 						CanBeMagic: true,
 						CanBeRare:  true,
-					})
+					}); err != nil {
+						return fmt.Errorf("upsert item type %q: %w", tc.code, err)
+					}
 				}
 				ensuredTypes[tc.code] = true
 			}
@@ -412,12 +414,16 @@ func (h *HTMLImporterV2) importUniques(ctx context.Context, pagesPath string, re
 					if properties[i].Alternatives[j].Code != "raw" {
 						h.translator.EnrichProperty(&properties[i].Alternatives[j])
 					}
-					h.statRegistry.EnsureStat(ctx, properties[i].Alternatives[j])
+					if err := h.statRegistry.EnsureStat(ctx, properties[i].Alternatives[j]); err != nil {
+						return fmt.Errorf("ensure stat: %w", err)
+					}
 				}
 			} else if properties[i].Code != "raw" {
 				h.translator.EnrichProperty(&properties[i])
 			}
-			h.statRegistry.EnsureStat(ctx, properties[i])
+			if err := h.statRegistry.EnsureStat(ctx, properties[i]); err != nil {
+				return fmt.Errorf("ensure stat: %w", err)
+			}
 		}
 
 		imageURL := h.maybeUploadImage(ctx, item.ImagePath, "d2/unique", item.Name, result)
@@ -486,7 +492,9 @@ func (h *HTMLImporterV2) importSets(ctx context.Context, pagesPath string, resul
 				if prop.Code != "raw" {
 					h.translator.EnrichProperty(&prop)
 				}
-				h.statRegistry.EnsureStat(ctx, prop)
+				if err := h.statRegistry.EnsureStat(ctx, prop); err != nil {
+					return fmt.Errorf("ensure stat: %w", err)
+				}
 				partialBonuses = append(partialBonuses, prop)
 			}
 			for _, line := range fs.FullBonuses {
@@ -494,7 +502,9 @@ func (h *HTMLImporterV2) importSets(ctx context.Context, pagesPath string, resul
 				if prop.Code != "raw" {
 					h.translator.EnrichProperty(&prop)
 				}
-				h.statRegistry.EnsureStat(ctx, prop)
+				if err := h.statRegistry.EnsureStat(ctx, prop); err != nil {
+					return fmt.Errorf("ensure stat: %w", err)
+				}
 				fullBonuses = append(fullBonuses, prop)
 			}
 		}
@@ -553,7 +563,9 @@ func (h *HTMLImporterV2) importSets(ctx context.Context, pagesPath string, resul
 			if properties[i].Code != "raw" {
 				h.translator.EnrichProperty(&properties[i])
 			}
-			h.statRegistry.EnsureStat(ctx, properties[i])
+			if err := h.statRegistry.EnsureStat(ctx, properties[i]); err != nil {
+				return fmt.Errorf("ensure stat: %w", err)
+			}
 		}
 
 		// Reverse-translate set bonuses
@@ -565,7 +577,9 @@ func (h *HTMLImporterV2) importSets(ctx context.Context, pagesPath string, resul
 				if prop.Code != "raw" {
 					h.translator.EnrichProperty(&prop)
 				}
-				h.statRegistry.EnsureStat(ctx, prop)
+				if err := h.statRegistry.EnsureStat(ctx, prop); err != nil {
+					return fmt.Errorf("ensure stat: %w", err)
+				}
 				bonusProperties = append(bonusProperties, prop)
 			}
 		}
@@ -659,7 +673,9 @@ func (h *HTMLImporterV2) importRunewords(ctx context.Context, pagesPath string, 
 					if props[i].Code != "raw" {
 						h.translator.EnrichProperty(&props[i])
 					}
-					h.statRegistry.EnsureStat(ctx, props[i])
+					if err := h.statRegistry.EnsureStat(ctx, props[i]); err != nil {
+						return fmt.Errorf("ensure stat: %w", err)
+					}
 				}
 				propsByType[typeName] = props
 			}
@@ -672,7 +688,9 @@ func (h *HTMLImporterV2) importRunewords(ctx context.Context, pagesPath string, 
 				if properties[i].Code != "raw" {
 					h.translator.EnrichProperty(&properties[i])
 				}
-				h.statRegistry.EnsureStat(ctx, properties[i])
+				if err := h.statRegistry.EnsureStat(ctx, properties[i]); err != nil {
+					return fmt.Errorf("ensure stat: %w", err)
+				}
 			}
 			runeword.Properties = properties
 		}
@@ -885,7 +903,9 @@ func (h *HTMLImporterV2) linkVariants(ctx context.Context, pagesPath string) err
 			}
 
 			if !h.dryRun {
-				h.repo.UpdateItemBaseVariants(ctx, myCode, normalCode, exceptionalCode, eliteCode)
+				if err := h.repo.UpdateItemBaseVariants(ctx, myCode, normalCode, exceptionalCode, eliteCode); err != nil {
+					return fmt.Errorf("update item base variants: %w", err)
+				}
 			}
 		}
 	}
@@ -971,12 +991,6 @@ func (h *HTMLImporterV2) ensureJewelryAndCharmBases(ctx context.Context, result 
 	return nil
 }
 
-// miscCategory is kept for backward compatibility. Use miscCategoryPair instead.
-// Deprecated: use miscCategoryPair from item_categories.go
-func miscCategory(name string) string {
-	return miscCategoryPair(name).Category
-}
-
 // translateAndRegisterMods reverse-translates mod text lines and registers stats
 func (h *HTMLImporterV2) translateAndRegisterMods(ctx context.Context, lines []string) []Property {
 	mods := h.reverseTranslator.ReverseTranslateLines(lines)
@@ -984,7 +998,7 @@ func (h *HTMLImporterV2) translateAndRegisterMods(ctx context.Context, lines []s
 		if mods[i].Code != "raw" {
 			h.translator.EnrichProperty(&mods[i])
 		}
-		h.statRegistry.EnsureStat(ctx, mods[i])
+		_ = h.statRegistry.EnsureStat(ctx, mods[i])
 	}
 	return mods
 }

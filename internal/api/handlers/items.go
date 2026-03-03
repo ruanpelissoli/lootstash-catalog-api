@@ -20,14 +20,6 @@ func NewItemHandler(service *services.CatalogService) *ItemHandler {
 	return &ItemHandler{service: service}
 }
 
-// capitalize returns a string with the first letter uppercased
-func capitalize(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
-}
-
 // Search handles item search requests
 // GET /api/d2/items/search?q=<query>&limit=<limit>
 func (h *ItemHandler) Search(c *fiber.Ctx) error {

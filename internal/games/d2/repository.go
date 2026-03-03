@@ -835,7 +835,7 @@ func (r *Repository) ReplaceRunewordBases(ctx context.Context, bases []*Runeword
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx, `DELETE FROM d2.runeword_bases`); err != nil {
 		return fmt.Errorf("delete runeword_bases: %w", err)
@@ -967,9 +967,9 @@ func (r *Repository) GetAllRunewordsForMatching(ctx context.Context) ([]Runeword
 		}
 
 		var validTypes, excludedTypes, runes []string
-		json.Unmarshal(validTypesJSON, &validTypes)
-		json.Unmarshal(excludedTypesJSON, &excludedTypes)
-		json.Unmarshal(runesJSON, &runes)
+		_ = json.Unmarshal(validTypesJSON, &validTypes)
+		_ = json.Unmarshal(excludedTypesJSON, &excludedTypes)
+		_ = json.Unmarshal(runesJSON, &runes)
 
 		rw.ValidItemTypes = validTypes
 		rw.ExcludedItemTypes = excludedTypes

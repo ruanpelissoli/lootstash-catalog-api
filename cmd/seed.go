@@ -439,27 +439,27 @@ func seedStepVerify(ctx context.Context, db *database.DB) error {
 
 	// Check for items with images
 	var withImages, total int
-	pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.unique_items WHERE image_url IS NOT NULL AND image_url != ''`).Scan(&withImages)
-	pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.unique_items`).Scan(&total)
+	_ = pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.unique_items WHERE image_url IS NOT NULL AND image_url != ''`).Scan(&withImages)
+	_ = pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.unique_items`).Scan(&total)
 	if total > 0 {
 		fmt.Printf("\n  Unique items with images: %d/%d (%.1f%%)\n", withImages, total, float64(withImages)/float64(total)*100)
 	}
 
-	pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.set_items WHERE image_url IS NOT NULL AND image_url != ''`).Scan(&withImages)
-	pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.set_items`).Scan(&total)
+	_ = pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.set_items WHERE image_url IS NOT NULL AND image_url != ''`).Scan(&withImages)
+	_ = pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.set_items`).Scan(&total)
 	if total > 0 {
 		fmt.Printf("  Set items with images: %d/%d (%.1f%%)\n", withImages, total, float64(withImages)/float64(total)*100)
 	}
 
-	pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.runewords WHERE image_url IS NOT NULL AND image_url != ''`).Scan(&withImages)
-	pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.runewords`).Scan(&total)
+	_ = pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.runewords WHERE image_url IS NOT NULL AND image_url != ''`).Scan(&withImages)
+	_ = pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.runewords`).Scan(&total)
 	if total > 0 {
 		fmt.Printf("  Runewords with images: %d/%d (%.1f%%)\n", withImages, total, float64(withImages)/float64(total)*100)
 	}
 
 	// Check stats
 	var statCount int
-	pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.stats`).Scan(&statCount)
+	_ = pool.QueryRow(ctx, `SELECT COUNT(*) FROM d2.stats`).Scan(&statCount)
 	fmt.Printf("\n  Stat codes registered: %d\n", statCount)
 
 	if allGood {

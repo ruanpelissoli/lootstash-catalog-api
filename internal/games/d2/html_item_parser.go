@@ -852,14 +852,6 @@ func (p *HTMLItemParser) extractInventorySize(s *goquery.Selection) (int, int) {
 	return width, height
 }
 
-func containsStr(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
 
 // extractName gets the item name from h3.z-sort-name > a
 func (p *HTMLItemParser) extractName(s *goquery.Selection) string {
@@ -1047,6 +1039,7 @@ func (p *HTMLItemParser) cleanPropertyHTML(html string) []string {
 	html = strings.ReplaceAll(html, "\u2013", "-")   // en-dash unicode
 
 	// Split into lines and clean
+	classBlockRegex := regexp.MustCompile(`^(Ama|Sor|Nec|Pal|Bar|Dru|Ass|War):\s*\d+%?$`)
 	var lines []string
 	for _, line := range strings.Split(html, "\n") {
 		line = strings.TrimSpace(line)
@@ -1075,7 +1068,7 @@ func (p *HTMLItemParser) cleanPropertyHTML(html string) []string {
 		if strings.HasPrefix(line, "Class block:") || strings.HasPrefix(line, "Weight:") {
 			continue
 		}
-		if matched, _ := regexp.MatchString(`^(Ama|Sor|Nec|Pal|Bar|Dru|Ass|War):\s*\d+%?$`, line); matched {
+		if classBlockRegex.MatchString(line) {
 			continue
 		}
 		// Skip filter lines
