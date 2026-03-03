@@ -17,6 +17,11 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
+// Ping checks if the database connection is alive
+func (r *Repository) Ping(ctx context.Context) error {
+	return r.pool.Ping(ctx)
+}
+
 // ItemType operations
 func (r *Repository) ItemTypeExists(ctx context.Context, code string) (bool, error) {
 	var exists bool

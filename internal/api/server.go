@@ -23,10 +23,11 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	app     *fiber.App
-	repo    *d2.Repository
-	service *services.CatalogService
-	config  *Config
+	app        *fiber.App
+	repo       *d2.Repository
+	service    *services.CatalogService
+	config     *Config
+	redisCache *cache.RedisCache
 }
 
 // Config holds server configuration
@@ -71,10 +72,11 @@ func NewServer(repo *d2.Repository, config *Config, redisCache *cache.RedisCache
 	})
 
 	server := &Server{
-		app:     app,
-		repo:    repo,
-		service: services.NewCatalogService(repo, redisCache),
-		config:  config,
+		app:        app,
+		repo:       repo,
+		service:    services.NewCatalogService(repo, redisCache),
+		config:     config,
+		redisCache: redisCache,
 	}
 
 	server.setupMiddleware()
@@ -125,11 +127,51 @@ func (s *Server) setupMiddleware() {
 }
 
 func (s *Server) setupRoutes() {
-	// Health check
+	// Health check (simple liveness)
 	s.app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"status":  "ok",
 			"service": "lootstash-catalog-api",
+		})
+	})
+
+	// Deep health check (readiness: API + DB + Redis)
+	s.app.Get("/healthz", func(c *fiber.Ctx) error {
+		ctx := c.Context()
+		checks := fiber.Map{}
+		healthy := true
+
+		checks["api"] = "ok"
+
+		if err := s.repo.Ping(ctx); err != nil {
+			checks["database"] = fmt.Sprintf("error: %s", err.Error())
+			healthy = false
+		} else {
+			checks["database"] = "ok"
+		}
+
+		if s.redisCache == nil {
+			checks["redis"] = "disabled"
+		} else if err := s.redisCache.Ping(ctx); err != nil {
+			checks["redis"] = fmt.Sprintf("error: %s", err.Error())
+			healthy = false
+		} else {
+			checks["redis"] = "ok"
+		}
+
+		status := "ok"
+		if !healthy {
+			status = "degraded"
+		}
+
+		code := fiber.StatusOK
+		if !healthy {
+			code = fiber.StatusServiceUnavailable
+		}
+
+		return c.Status(code).JSON(fiber.Map{
+			"status": status,
+			"checks": checks,
 		})
 	})
 
@@ -273,7 +315,8 @@ func (s *Server) Start() error {
 	return s.app.Listen(addr)
 }
 
-// Shutdown gracefully shuts down the server
+// Shutdown gracefully shuts down the server, waiting up to 30s for active
+// requests to finish before forcing a close.
 func (s *Server) Shutdown() error {
-	return s.app.Shutdown()
+	return s.app.ShutdownWithTimeout(30 * time.Second)
 }

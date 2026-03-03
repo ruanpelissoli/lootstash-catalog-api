@@ -95,6 +95,11 @@ func (c *RedisCache) DeleteByPattern(ctx context.Context, pattern string) error 
 	return nil
 }
 
+// Ping checks if the Redis connection is alive
+func (c *RedisCache) Ping(ctx context.Context) error {
+	return c.client.Ping(ctx).Err()
+}
+
 // Exists checks if a key exists in cache
 func (c *RedisCache) Exists(ctx context.Context, key string) (bool, error) {
 	n, err := c.client.Exists(ctx, key).Result()
